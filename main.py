@@ -1,4 +1,4 @@
-from selenium.webdriver import Chrome
+from selenium.webdriver import Firefox
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import ElementNotInteractableException
 import time
@@ -6,14 +6,16 @@ import re
 import random
 
 # Start up chrome and open the website
-driver = Chrome()
+driver = Firefox()
 driver.maximize_window()
 driver.get('http://atc-sim.com/')
 
 # Change the airport and start the game
-driver.find_element_by_xpath('/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
+driver.find_element_by_xpath(
+    '/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
 # driver.find_element_by_xpath('//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()
-driver.find_element_by_xpath('//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
+driver.find_element_by_xpath(
+    '//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
 time.sleep(3)
 
 failed = True
@@ -24,88 +26,61 @@ while failed:
     except ElementNotInteractableException:
         time.sleep(1)
 
-command_input = driver.find_element_by_xpath('//*[@id="canvas"]/div[1]/div/form/input[1]')
-takeOffQueue = {}
-arrivals = {}
-onApproach = {}
-departures = {}
-plane_states = {}
-cleared = False
+command_input = driver.find_element_by_xpath(
+    '//*[@id="canvas"]/div[1]/div/form/input[1]')
+# Plane States is an array that stores the state of each plane in play
+# It has a list of sub-arrays corresponding to each possible state
+# 0 - planes waiting to takeoff - (Callsign, Runway, Destination)
+# 1 - planes departing
+# 2 - planes being guided to their final approach
+# 3 - planes on final approach
+# Each index will contain an array of each plane in that state
+plane_states = [[], [], [], []]
 
 
 def parse_plane_strips(html):
-    global cleared
+    global plane_states
 
-    plane_states.clear()
-    departures.clear()
-    onApproach.clear()
+    plane_states = [[], [], [], []]
     to_queue_expression = \
-        '<div id="(.+?)" name="\\1".+? rgb\\(192, 228, 250\\);">\\1 &nbsp;(\\d{1,2}[LR]).+?To: (.{3,6})<'
+        r'<div id="(.+?)" name="\1".+? rgb\(192, 228, 250\);">\1 &nbsp;(\d{1,2}[LR]).+?To: (.{3,6})<'
     for match in re.findall(to_queue_expression, html):
         # print('Departure Callsign: {}, Runway: {}, Destination: {}'.format(match[0], match[1], match[2]))
-        takeOffQueue[match[0]] = [match[1], match[2]]
-        plane_states[match[0]] = 0
+        plane_states[0].append([match[0], match[1], match[2]])
 
-    departure_expression = '<div id="(.+?)" name="\\1".+? rgb\\(192, 228, 250\\);">\\1 &nbsp;(\\D.+?) '
+    departure_expression = r'<div id="(.+?)" name="\1".+? rgb\(192, 228, 250\);">\1 &nbsp;(\D.+?) '
     for match in re.findall(departure_expression, html):
         # print('Departure Callsign: {}, Destination: {}'.format(match[0], match[1]))
-        if match[0] in takeOffQueue:
-            takeOffQueue.pop(match[0])
-            cleared = False
+        plane_states[1].append([match[0], match[1]])
 
-        departures[match[0]] = [match[1]]
-        plane_states[match[0]] = 1
-
-    arrival_expression = '<div id="(.+?)" name="\\1".+? rgb\\(252, 240, 198\\);">\\1 &nbsp;(\\w[A-Z]{2,5}|\\d{2,3}°)'
+    arrival_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;(\w[A-Z]{2,5}|\d{2,3}°)'
     for match in re.findall(arrival_expression, html):
         # print('Arrival Callsign: {}, Heading: {}'.format(match[0], match[1]))
-        arrivals[match[0]] = [match[1].replace('°', '')]
-        plane_states[match[0]] = 2
+        plane_states[2].append([match[0], match[1].replace('°', '')])
 
-    approach_expression = '<div id="(.+?)" name="\\1".+? rgb\\(252, 240, 198\\);">\\1 &nbsp;((?:9|27)[LR])'
+    approach_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;((?:9|27)[LR])'
     for match in re.findall(approach_expression, html):
         # print('Approach Callsign: {}, Destination: {}'.format(match[0], match[1]))
-        onApproach[match[0]] = [match[1]]
-        plane_states[match[0]] = 3
+        plane_states[3].append([match[0], match[1]])
 
 
 def parse_canvas(html):
-    parse_expression = '<div id="(.+?)" class="SanSerif12".+?left: (.+?)px; top: (.+?)px.*\\1<br>(\\d{3})'
+    parse_expression = r'<div id="(.+?)" class="SanSerif12".+?left: (.+?)px; top: (.+?)px.*\1<br>(\d{3})'
     for match in re.findall(parse_expression, html):
         callsign = match[0]
-        if match[0] in plane_states:
-            state = plane_states[callsign]
-        else:
-            return
-
-        if state == 1:
-            departures[callsign].append(int(match[3]))
-        elif state == 2:
-            arrivals[callsign].append(int(match[1]))
-            arrivals[callsign].append(int(match[2]))
-            arrivals[callsign].append(int(match[3]))
+        for category in plane_states:
+            for plane in category:
+                if plane[0] == callsign:
+                    plane.append(int(match[1]))
+                    plane.append(int(match[2]))
+                    plane.append(int(match[3] * 100))
+    
+        
 
 
 def get_command_list():
-    global cleared
-    commands = []
-
-    # Takeoff commands
-    can_takeoff = True
-    for callsign in departures:
-        plane = departures[callsign]
-        if (len(plane) > 1 and plane[1] <= 5) or len(plane) <= 1:
-            can_takeoff = False
-            break
-
-    if can_takeoff and len(takeOffQueue) >= 1 and not cleared:
-        callsign = random.choice(list(takeOffQueue.keys()))
-        commands.append("{} C {} C 11 T".format(callsign, takeOffQueue[callsign][1]))
-        cleared = True
-
-    # Landing commands
-    print(arrivals)
-    return commands
+    # commands.append("{} C {} C 11 T".format(callsign, takeoff_queue[callsign][1]))
+    pass
 
 
 def execute_commands(commands):
@@ -118,11 +93,13 @@ def execute_commands(commands):
 while True:
     print('-----------------------------')
     driver.switch_to.frame('ProgressStrips')
-    strips_text = driver.find_element_by_xpath('//*[@id="strips"]').get_attribute('innerHTML')
+    strips_text = driver.find_element_by_xpath(
+        '//*[@id="strips"]').get_attribute('innerHTML')
     parse_plane_strips(strips_text)
     driver.switch_to.parent_frame()
-    canvas_text = driver.find_element_by_xpath('//*[@id="canvas"]').get_attribute('innerHTML')
+    canvas_text = driver.find_element_by_xpath(
+        '//*[@id="canvas"]').get_attribute('innerHTML')
     parse_canvas(canvas_text)
-    command_list = get_command_list()
-    execute_commands(command_list)
+    #command_list = get_command_list()
+    #execute_commands(command_list)
     time.sleep(2)
