@@ -5,3 +5,4 @@
 geckodriver.*
 /__pycache__/
 *.html
+example1.html
