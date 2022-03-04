@@ -3,3 +3,5 @@
 /.idea/
 *.exe
 geckodriver.*
+/__pycache__/
+*.html

@@ -4,37 +4,13 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import ElementNotInteractableException
 import time
 import re
+import math
 
 TAKEOFF_QUEUE = 0
 DEPARTURE = 1
 ARRIVAL = 2
 APPROACHING = 3
 
-
-# Start up chrome and open the website
-driver = Firefox()
-driver.maximize_window()
-driver.get('http://atc-sim.com/')
-
-# Change the airport and start the game
-driver.find_element(by=By.XPATH,
-                    value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
-driver.find_element_by_xpath(
-    '//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()
-driver.find_element(by=By.XPATH,
-                    value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
-time.sleep(3)
-
-failed = True
-while failed:
-    try:
-        driver.find_element(by=By.XPATH, value='//*[@id="btnclose"]').click()
-        failed = False
-    except ElementNotInteractableException:
-        time.sleep(1)
-
-command_input = driver.find_element(by=By.XPATH,
-                                    value='//*[@id="canvas"]/div[1]/div/form/input[1]')
 # Plane States is an array that stores the state of each plane in play
 # It has a list of sub-arrays corresponding to each possible state
 # 0 - planes waiting to takeoff - (Callsign, Runway, Destination)
@@ -82,8 +58,28 @@ def parse_canvas(html):
             for plane in category:
                 if plane[0] == callsign:
                     plane.append(int(match[1]))
-                    plane.append(int(match[2]))
+                    plane.append(750 - int(match[2]))
                     plane.append(int(match[3]) * 100)
+
+
+def calculate_heading(pos1, pos2):
+    lat1 = math.radians(pos1[1])
+    lat2 = math.radians(pos2[1])
+
+    diffLong = math.radians(pos2[0] - pos1[0])
+
+    x = math.sin(diffLong) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1)
+                                           * math.cos(lat2) * math.cos(diffLong))
+
+    initial_hdg = math.atan2(x, y)
+
+    initial_hdg = math.degrees(initial_hdg)
+    calc_hdg = (initial_hdg + 360) % 360
+
+    hdg = 5 * round(calc_hdg / 5)
+
+    return hdg
 
 
 def get_command_list():
@@ -97,14 +93,14 @@ def get_command_list():
     for departure in plane_states[DEPARTURE]:
         if departure[4] < 200:
             safe_runways = [False, False]
-    
+
     for approaching in plane_states[APPROACHING]:
         if approaching[4] < 700:
             if 'L' in approaching[1]:
                 safe_runways[0] = False
             elif 'R' in approaching[1]:
                 safe_runways[1] = False
-    
+
     for rto in plane_states[TAKEOFF_QUEUE]:
         if 'L' in rto[1] and safe_runways[0]:
             callsign = rto[0]
@@ -117,6 +113,8 @@ def get_command_list():
             command_list.append('{} C {} C 11 T'.format(callsign, destination))
             safe_runways[1] = False
 
+    # Calculate coordinates for each plane on the approaching list
+
     return command_list
 
 
@@ -127,15 +125,42 @@ def execute_commands(commands):
         command_input.send_keys(Keys.ENTER)
 
 
-while True:
-    driver.switch_to.frame('ProgressStrips')
-    strips_text = driver.find_element(by=By.XPATH,
-                                      value='//*[@id="strips"]').get_attribute('innerHTML')
-    parse_plane_strips(strips_text)
-    driver.switch_to.parent_frame()
-    canvas_text = driver.find_element(by=By.XPATH,
-                                      value='//*[@id="canvas"]').get_attribute('innerHTML')
-    parse_canvas(canvas_text)
-    command_list = get_command_list()
-    execute_commands(command_list)
-    time.sleep(2)
+if __name__ == '__main__':
+    # Start up chrome and open the website
+    driver = Firefox()
+    driver.maximize_window()
+    driver.get('http://atc-sim.com/')
+
+    # Change the airport and start the game
+    driver.find_element(by=By.XPATH,
+                        value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
+    driver.find_element_by_xpath(
+        '//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()
+    driver.find_element(by=By.XPATH,
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
+    time.sleep(3)
+
+    failed = True
+    while failed:
+        try:
+            driver.find_element(
+                by=By.XPATH, value='//*[@id="btnclose"]').click()
+            failed = False
+        except ElementNotInteractableException:
+            time.sleep(1)
+
+    command_input = driver.find_element(by=By.XPATH,
+                                        value='//*[@id="canvas"]/div[1]/div/form/input[1]')
+
+    while True:
+        driver.switch_to.frame('ProgressStrips')
+        strips_text = driver.find_element(by=By.XPATH,
+                                          value='//*[@id="strips"]').get_attribute('innerHTML')
+        parse_plane_strips(strips_text)
+        driver.switch_to.parent_frame()
+        canvas_text = driver.find_element(by=By.XPATH,
+                                          value='//*[@id="canvas"]').get_attribute('innerHTML')
+        parse_canvas(canvas_text)
+        command_list = get_command_list()
+        execute_commands(command_list)
+        time.sleep(2)
