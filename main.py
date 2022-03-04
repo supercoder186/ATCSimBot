@@ -19,6 +19,7 @@ APPROACHING = 3
 # 3 - planes on final approach
 # Each index will contain an array of each plane in that state
 plane_states = [[], [], [], []]
+taking_off = []
 
 
 def parse_plane_strips(html):
@@ -35,6 +36,8 @@ def parse_plane_strips(html):
     for match in re.findall(departure_expression, html):
         # print('Departure Callsign: {}, Destination: {}'.format(match[0], match[1]))
         plane_states[DEPARTURE].append([match[0], match[1]])
+        if match[0] in taking_off:
+            taking_off.remove(match[0])
 
     arrival_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;(\w[A-Z]{2,5}|\d{2,3}°)'
     for match in re.findall(arrival_expression, html):
@@ -97,13 +100,19 @@ def get_command_list():
     for rto in plane_states[TAKEOFF_QUEUE]:
         if 'L' in rto[1] and safe_runways[0]:
             callsign = rto[0]
-            destination = rto[2]
-            command_list.append('{} C {} C 11 T'.format(callsign, destination))
+            if not callsign in taking_off:
+                destination = rto[2]
+                command_list.append('{} C {} C 11 T'.format(callsign, destination))
+                taking_off.append(callsign)
+
             safe_runways[0] = False
         elif 'R' in rto[1] and safe_runways[1]:
             callsign = rto[0]
-            destination = rto[2]
-            command_list.append('{} C {} C 11 T'.format(callsign, destination))
+            if not callsign in taking_off:
+                destination = rto[2]
+                command_list.append('{} C {} C 11 T'.format(callsign, destination))
+                taking_off.append(callsign)
+
             safe_runways[1] = False
 
     # Calculate coordinates for each plane on the approaching list
@@ -124,7 +133,7 @@ def get_command_list():
 
 def execute_commands(commands):
     for command in commands:
-        # print("Executing command:", command)
+        print("Executing command:", command)
         command_input.send_keys(command)
         command_input.send_keys(Keys.ENTER)
 
@@ -139,7 +148,7 @@ if __name__ == '__main__':
     driver.find_element(by=By.XPATH,
                         value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
     driver.find_element(by=By.XPATH,
-                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
     time.sleep(1)
