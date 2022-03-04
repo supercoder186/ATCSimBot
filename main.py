@@ -57,27 +57,20 @@ def parse_canvas(html):
         for category in plane_states:
             for plane in category:
                 if plane[0] == callsign:
-                    plane.append(int(match[1]))
-                    plane.append(750 - int(match[2]))
+                    plane.append(int(match[1]) + 25)
+                    plane.append(950 - int(match[2]))
                     plane.append(int(match[3]) * 100)
 
 
 def calculate_heading(pos1, pos2):
-    lat1 = math.radians(pos1[1])
-    lat2 = math.radians(pos2[1])
+    dx = pos2[0] - pos1[0]
+    dy = pos2[1] - pos1[1]
 
-    diffLong = math.radians(pos2[0] - pos1[0])
-
-    x = math.sin(diffLong) * math.cos(lat2)
-    y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1)
-                                           * math.cos(lat2) * math.cos(diffLong))
-
-    initial_hdg = math.atan2(x, y)
-
-    initial_hdg = math.degrees(initial_hdg)
-    calc_hdg = (initial_hdg + 360) % 360
-
-    hdg = 5 * round(calc_hdg / 5)
+    initial_hdg = math.degrees(math.atan2(dx, dy))
+    if initial_hdg < 0:
+        initial_hdg += 360
+    
+    hdg = round(initial_hdg)
 
     return hdg
 
@@ -114,13 +107,24 @@ def get_command_list():
             safe_runways[1] = False
 
     # Calculate coordinates for each plane on the approaching list
+    target_point = (187, 497)
+    for arrival in plane_states[ARRIVAL]:
+        plane_heading = int(arrival[1])
+        plane_pos = (arrival[2], arrival[3])
+        target_heading = calculate_heading(plane_pos, target_point)
+        if abs(target_heading - plane_heading) > 5:
+            hdg_str = str(target_heading)
+            while len(hdg_str) < 3:
+                hdg_str = '0' + hdg_str
+            
+            command_list.append('{} C {}'.format(arrival[0], hdg_str))
 
     return command_list
 
 
 def execute_commands(commands):
     for command in commands:
-        print("Executing command:", command)
+        # print("Executing command:", command)
         command_input.send_keys(command)
         command_input.send_keys(Keys.ENTER)
 
@@ -134,11 +138,11 @@ if __name__ == '__main__':
     # Change the airport and start the game
     driver.find_element(by=By.XPATH,
                         value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
-    driver.find_element_by_xpath(
-        '//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()
+    driver.find_element(by=By.XPATH,
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
-    time.sleep(3)
+    time.sleep(1)
 
     failed = True
     while failed:
