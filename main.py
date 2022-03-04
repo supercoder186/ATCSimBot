@@ -67,7 +67,7 @@ def parse_plane_strips(html):
 
     approach_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;((?:9|27)[LR])'
     for match in re.findall(approach_expression, html):
-        # print('Approach Callsign: {}, Destination: {}'.format(match[0], match[1]))
+        # print('Approach Callsign: {}, Runway: {}'.format(match[0], match[1]))
         plane_states[APPROACHING].append([match[0], match[1]])
 
 
@@ -91,23 +91,31 @@ def get_command_list():
 
     # First find if it is safe for a plane to takeoff
     # Values of min & max height for TO and Landing aircraft can be changed later
-    safe_for_hold = True
 
     # Index 0 is Left Rwy, Index 1 is Right Rwy
     safe_runways = [True, True]
     for departure in plane_states[DEPARTURE]:
         if departure[4] < 200:
-            safe_for_takeoff = False
-
+            safe_runways = [False, False]
+    
     for approaching in plane_states[APPROACHING]:
         if approaching[4] < 700:
-            
-            safe_for_takeoff = False
-
-    if safe_for_takeoff and len(plane_states[TAKEOFF_QUEUE]):
-        callsign = plane_states[TAKEOFF_QUEUE][0][0]
-        destination = plane_states[TAKEOFF_QUEUE][0][2]
-        command_list.append('{} C {} C 11 T'.format(callsign, destination))
+            if 'L' in approaching[1]:
+                safe_runways[0] = False
+            elif 'R' in approaching[1]:
+                safe_runways[1] = False
+    
+    for rto in plane_states[TAKEOFF_QUEUE]:
+        if 'L' in rto[1] and safe_runways[0]:
+            callsign = rto[0]
+            destination = rto[2]
+            command_list.append('{} C {} C 11 T'.format(callsign, destination))
+            safe_runways[0] = False
+        elif 'R' in rto[1] and safe_runways[1]:
+            callsign = rto[0]
+            destination = rto[2]
+            command_list.append('{} C {} C 11 T'.format(callsign, destination))
+            safe_runways[1] = False
 
     return command_list
 
