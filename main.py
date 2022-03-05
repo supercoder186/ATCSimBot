@@ -112,7 +112,7 @@ def get_command_list():
             safe_runways = [False, False]
 
     for approaching in plane_states[APPROACHING]:
-        if approaching[4] < 700:
+        if approaching[4] < 800:
             if 'L' in approaching[1]:
                 safe_runways[0] = False
             elif 'R' in approaching[1]:
