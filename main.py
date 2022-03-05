@@ -20,6 +20,16 @@ APPROACHING = 3
 # Each index will contain an array of each plane in that state
 plane_states = [[], [], [], []]
 taking_off = []
+arrivals = {}
+
+
+# Target points with 09 landing runway
+TARGET_POINTS_09 = [(250, 800), (250, 500)]
+# Target points with 27 landing runway
+TARGET_POINTS_27 = [(1450, 800), (1450, 500)]
+# Target points
+target_points = []
+landing_runway = ''
 
 
 def parse_plane_strips(html):
@@ -48,6 +58,8 @@ def parse_plane_strips(html):
     for match in re.findall(approach_expression, html):
         # print('Approach Callsign: {}, Runway: {}'.format(match[0], match[1]))
         plane_states[APPROACHING].append([match[0], match[1]])
+        if match[0] in arrivals.keys:
+            arrivals.pop(match[0])
 
 
 def parse_canvas(html):
@@ -72,10 +84,8 @@ def calculate_heading(pos1, pos2):
     initial_hdg = math.degrees(math.atan2(dx, dy))
     if initial_hdg < 0:
         initial_hdg += 360
-    
-    hdg = round(initial_hdg)
 
-    return hdg
+    return round(initial_hdg)
 
 
 def get_command_list():
@@ -102,7 +112,8 @@ def get_command_list():
             callsign = rto[0]
             if not callsign in taking_off:
                 destination = rto[2]
-                command_list.append('{} C {} C 11 T'.format(callsign, destination))
+                command_list.append(
+                    '{} C {} C 11 T'.format(callsign, destination))
                 taking_off.append(callsign)
 
             safe_runways[0] = False
@@ -110,13 +121,13 @@ def get_command_list():
             callsign = rto[0]
             if not callsign in taking_off:
                 destination = rto[2]
-                command_list.append('{} C {} C 11 T'.format(callsign, destination))
+                command_list.append(
+                    '{} C {} C 11 T'.format(callsign, destination))
                 taking_off.append(callsign)
 
             safe_runways[1] = False
 
     # Calculate coordinates for each plane on the approaching list
-    target_point = (187, 497)
     for arrival in plane_states[ARRIVAL]:
         plane_heading = int(arrival[1])
         plane_pos = (arrival[2], arrival[3])
@@ -125,7 +136,7 @@ def get_command_list():
             hdg_str = str(target_heading)
             while len(hdg_str) < 3:
                 hdg_str = '0' + hdg_str
-            
+
             command_list.append('{} C {}'.format(arrival[0], hdg_str))
 
     return command_list
@@ -161,6 +172,19 @@ if __name__ == '__main__':
             failed = False
         except ElementNotInteractableException:
             time.sleep(1)
+
+    wind_dir = int(driver.find_element(by=By.XPATH,
+                                       value='/html/body/div[1]/div/div[9]/div[1]').get_attribute('innerHTML').split('<br>')[1].replace('°', ''))
+
+    # Check if the landing runway is 09 or 27
+    if abs(90 - wind_dir) < abs(270 - wind_dir):
+        # Hardcoded but I will change this later
+        landing_runway = '09L'
+        target_points = TARGET_POINTS_09
+    else:
+        # Hardcoded but I will change this later
+        landing_runway = '27R'
+        target_points = TARGET_POINTS_27
 
     command_input = driver.find_element(by=By.XPATH,
                                         value='//*[@id="canvas"]/div[1]/div/form/input[1]')
