@@ -66,7 +66,7 @@ def parse_plane_strips(html):
 
 
 def parse_canvas(html):
-    parse_expression = r'<div id="(.+?)" class="SanSerif12".+?left: (.+?)px; top: (.+?)px.*\1<br>(\d{3})'
+    parse_expression = r'<div id="(.+?)" class="SanSerif12".+?left: (.+?)px; top: (.+?)px.*\1<br>(\d{3}).(\d{2})'
     for match in re.findall(parse_expression, html):
         callsign = match[0]
         # Iterate through each plane to find the matching callsign and then append the values of x, y and alt
@@ -78,6 +78,7 @@ def parse_canvas(html):
                     plane.append(int(match[1]) + 25)
                     plane.append(950 - int(match[2]))
                     plane.append(int(match[3]) * 100)
+                    plane.append(int(match[4]))
 
 
 def calculate_heading(pos1, pos2):
@@ -108,7 +109,7 @@ def get_command_list():
     # Index 0 is Left Rwy, Index 1 is Right Rwy
     safe_runways = [True, True]
     for departure in plane_states[DEPARTURE]:
-        if departure[4] < 200:
+        if departure[5] < 12:
             safe_runways = [False, False]
 
     for approaching in plane_states[APPROACHING]:
@@ -167,14 +168,14 @@ def get_command_list():
             if landing_rwy == '27':
                 if plane_pos[1] > 200 and plane_pos[1] < 800 and plane_pos[0] > 1350:
                     arrival_states[callsign] = 1
-                    command_list.append('{} C 3'.format(callsign))
+                    command_list.append('{} C 3 EX'.format(callsign))
                 else:
                     arrival_states[callsign] = 0
                     command_list.append('{} C 4'.format(callsign))
             else:
                 if plane_pos[1] > 200 and plane_pos[1] < 800 and plane_pos[0] < 350:
                     arrival_states[callsign] = 1
-                    command_list.append('{} C 3'.format(callsign))
+                    command_list.append('{} C 3 EX'.format(callsign))
                 else:
                     arrival_states[callsign] = 0
                     command_list.append('{} C 4'.format(callsign))
@@ -224,8 +225,8 @@ if __name__ == '__main__':
     # Change the airport and start the game
     driver.find_element(by=By.XPATH,
                         value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
-    '''driver.find_element(by=By.XPATH,
-                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()'''
+    driver.find_element(by=By.XPATH,
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
     time.sleep(1)
