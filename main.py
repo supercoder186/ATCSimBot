@@ -1,3 +1,4 @@
+from subprocess import call
 from selenium.webdriver import Firefox
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -20,16 +21,18 @@ APPROACHING = 3
 # Each index will contain an array of each plane in that state
 plane_states = [[], [], [], []]
 taking_off = []
-arrivals = {}
+arrival_states = {}
 
 
 # Target points with 09 landing runway
-TARGET_POINTS_09 = [(250, 800), (250, 500)]
+TARGET_POINTS_09_N = [(350, 800), (350, 600)]
+TARGET_POINTS_09_S = [(350, 150), (350, 350)]
 # Target points with 27 landing runway
-TARGET_POINTS_27 = [(1450, 800), (1450, 500)]
+TARGET_POINTS_27_N = [(1350, 800), (1350, 600)]
+TARGET_POINTS_27_S = [(1350, 200), (1350, 400)]
 # Target points
 target_points = []
-landing_runway = ''
+landing_rwy = ''
 
 
 def parse_plane_strips(html):
@@ -58,8 +61,8 @@ def parse_plane_strips(html):
     for match in re.findall(approach_expression, html):
         # print('Approach Callsign: {}, Runway: {}'.format(match[0], match[1]))
         plane_states[APPROACHING].append([match[0], match[1]])
-        if match[0] in arrivals.keys:
-            arrivals.pop(match[0])
+        if match[0] in arrival_states.keys():
+            arrival_states.pop(match[0])
 
 
 def parse_canvas(html):
@@ -86,6 +89,14 @@ def calculate_heading(pos1, pos2):
         initial_hdg += 360
 
     return round(initial_hdg)
+
+
+def calculate_sqr_distance(pos1, pos2):
+    dx = pos2[0] - pos1[0]
+    dy = pos2[1] - pos1[1]
+
+    sqr_d = (dx ** 2) + (dy ** 2)
+    return sqr_d
 
 
 def get_command_list():
@@ -127,11 +138,66 @@ def get_command_list():
 
             safe_runways[1] = False
 
-    # Calculate coordinates for each plane on the approaching list
+    # Calculate headings for each plane on the approaching list
     for arrival in plane_states[ARRIVAL]:
+        callsign = arrival[0]
         plane_heading = int(arrival[1])
         plane_pos = (arrival[2], arrival[3])
+        
+        if plane_pos[1] < 500:
+            if landing_rwy == '9':
+                target_points = TARGET_POINTS_09_S
+                intercept_hdg = 60
+                target_rwy = '9R'
+            else:
+                target_points = TARGET_POINTS_27_S
+                intercept_hdg = 300
+                target_rwy = '27L'
+        else:
+            if landing_rwy == '9':
+                target_points = TARGET_POINTS_09_N
+                intercept_hdg = 120
+                target_rwy = '9L'
+            else:
+                target_points = TARGET_POINTS_27_N
+                intercept_hdg = 240
+                target_rwy = '27R'
+
+        if not callsign in arrival_states:
+            if landing_rwy == '27':
+                if plane_pos[1] > 200 and plane_pos[1] < 800 and plane_pos[0] > 1350:
+                    arrival_states[callsign] = 1
+                    command_list.append('{} C 3'.format(callsign))
+                else:
+                    arrival_states[callsign] = 0
+                    command_list.append('{} C 4'.format(callsign))
+            else:
+                if plane_pos[1] > 200 and plane_pos[1] < 800 and plane_pos[0] < 350:
+                    arrival_states[callsign] = 1
+                    command_list.append('{} C 3'.format(callsign))
+                else:
+                    arrival_states[callsign] = 0
+                    command_list.append('{} C 4'.format(callsign))
+
+        elif arrival_states[callsign] == len(target_points):
+            command_list.append('{} L {}'.format(callsign, target_rwy))
+            continue
+
+        target_point = target_points[arrival_states[callsign]]
+
+        # Check if the plane is near the target point
+        if calculate_sqr_distance(plane_pos, target_point) < 1000:
+            arrival_states[callsign] += 1
+
+            command_list.append('{} C {}'.format(
+                callsign, 4 - arrival_states[callsign]))
+            # Check if the plane is at the last point
+            if arrival_states[callsign] == len(target_points):
+                command_list.append('{} C {}'.format(callsign, intercept_hdg))
+                command_list.append('{} L {}'.format(callsign, target_rwy))
+
         target_heading = calculate_heading(plane_pos, target_point)
+
         if abs(target_heading - plane_heading) > 5:
             hdg_str = str(target_heading)
             while len(hdg_str) < 3:
@@ -158,8 +224,8 @@ if __name__ == '__main__':
     # Change the airport and start the game
     driver.find_element(by=By.XPATH,
                         value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
-    driver.find_element(by=By.XPATH,
-                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()
+    '''driver.find_element(by=By.XPATH,
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()'''
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
     time.sleep(1)
@@ -179,12 +245,10 @@ if __name__ == '__main__':
     # Check if the landing runway is 09 or 27
     if abs(90 - wind_dir) < abs(270 - wind_dir):
         # Hardcoded but I will change this later
-        landing_runway = '09L'
-        target_points = TARGET_POINTS_09
+        landing_rwy = '9'
     else:
         # Hardcoded but I will change this later
-        landing_runway = '27R'
-        target_points = TARGET_POINTS_27
+        landing_rwy = '27'
 
     command_input = driver.find_element(by=By.XPATH,
                                         value='//*[@id="canvas"]/div[1]/div/form/input[1]')
