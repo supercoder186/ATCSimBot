@@ -153,7 +153,8 @@ def get_command_list():
             if not callsign in taking_off:
                 destination = rto[2]
                 command_list.append(
-                    '{} C {} C 11 T'.format(callsign, destination))
+                '{} C {} C 11 T'.format(callsign, destination))
+            
                 taking_off.append(callsign)
 
             safe_runways[1] = False
@@ -272,10 +273,10 @@ def get_command_list():
 
                     break
 
-        if clear_max_speed and speed == 180:
+        if clear_max_speed and speed == 160:
             command_list.append('{} S 240'.format(callsign))
         elif not clear_max_speed and speed == 240:
-            command_list.append('{} S 180'.format(callsign))
+            command_list.append('{} S 160'.format(callsign))
 
     # Ensure approaching planes are at 160 knots
     for approaching in plane_states[APPROACHING]:
