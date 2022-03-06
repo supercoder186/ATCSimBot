@@ -109,7 +109,7 @@ def get_command_list():
     # Index 0 is Left Rwy, Index 1 is Right Rwy
     safe_runways = [True, True]
     for departure in plane_states[DEPARTURE]:
-        if departure[5] < 12:
+        if departure[5] <= 12:
             safe_runways = [False, False]
 
     for approaching in plane_states[APPROACHING]:
@@ -225,8 +225,8 @@ if __name__ == '__main__':
     # Change the airport and start the game
     driver.find_element(by=By.XPATH,
                         value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
-    driver.find_element(by=By.XPATH,
-                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()
+    '''driver.find_element(by=By.XPATH,
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()'''
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
     time.sleep(1)
