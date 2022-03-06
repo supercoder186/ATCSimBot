@@ -64,6 +64,10 @@ def parse_plane_strips(html):
         plane_states[APPROACHING].append([match[0], match[1]])
         if match[0] in arrival_states.keys():
             arrival_states.pop(match[0])
+            if 'L' in target_rwy: 
+                target_rwy.replace('L', 'R')
+            else:
+                target_rwy.replace('R', 'L')
 
 
 def parse_canvas(html):
@@ -161,11 +165,6 @@ def get_command_list():
                 target_points = TARGET_POINTS_27_N
                 intercept_hdg = 240
 
-        if 'L' in target_rwy: 
-            target_rwy.replace('L', 'R')
-        else:
-            target_rwy.replace('R', 'L')
-
         if not callsign in arrival_states:
             if landing_rwy == '27':
                 if plane_pos[1] > 200 and plane_pos[1] < 800 and plane_pos[0] > 1350:
@@ -196,7 +195,11 @@ def get_command_list():
                 callsign, 4 - arrival_states[callsign]))
             # Check if the plane is at the last point
             if arrival_states[callsign] == len(target_points):
-                command_list.append('{} C {}'.format(callsign, intercept_hdg))
+                hdg_str = str(intercept_hdg)
+                if len(hdg_str) < 3:
+                    hdg_str = '0' + hdg_str
+                
+                command_list.append('{} C {}'.format(callsign, hdg_str))
                 command_list.append('{} L {}'.format(callsign, target_rwy))
 
         target_heading = calculate_heading(plane_pos, target_point)
