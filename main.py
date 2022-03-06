@@ -21,6 +21,7 @@ APPROACHING = 3
 # Each index will contain an array of each plane in that state
 plane_states = [[], [], [], []]
 taking_off = []
+intercepting = {}
 arrival_states = {}
 
 
@@ -70,6 +71,8 @@ def parse_plane_strips(html):
         plane_states[APPROACHING].append([match[0], match[1]])
         if match[0] in arrival_states.keys():
             arrival_states.pop(match[0])
+        if match[0] in intercepting.keys():
+            intercepting.pop(match[0])
 
 
 # Parse the data shown on the radar screen
@@ -198,7 +201,7 @@ def get_command_list():
                     command_list.append('{} C 4'.format(callsign))
 
         elif arrival_states[callsign] == len(target_points):
-            command_list.append('{} L {}'.format(callsign, target_rwy))
+            command_list.append('{} L {}'.format(callsign, intercepting[target_rwy]))
             continue
 
         target_point = target_points[arrival_states[callsign]]
@@ -227,7 +230,7 @@ def get_command_list():
 
                 command_list.append('{} C {}'.format(callsign, hdg_str))
                 command_list.append('{} L {}'.format(callsign, target_rwy))
-
+                intercepting[callsign] = target_rwy
                 continue
 
         target_heading = calculate_heading(plane_pos, target_point)
