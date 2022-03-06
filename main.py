@@ -272,7 +272,7 @@ def get_command_list():
 
                     break
 
-        if clear_max_speed and speed < 240:
+        if clear_max_speed and speed == 180:
             command_list.append('{} S 240'.format(callsign))
         elif not clear_max_speed and speed == 240:
             command_list.append('{} S 180'.format(callsign))
