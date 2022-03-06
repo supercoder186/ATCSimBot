@@ -26,26 +26,30 @@ arrival_states = {}
 
 # Target points with 09 landing runway
 TARGET_POINTS_09_N = [(350, 800), (350, 600)]
-TARGET_POINTS_09_S = [(350, 150), (350, 350)]
+TARGET_POINTS_09_S = [(350, 250), (350, 450)]
 # Target points with 27 landing runway
 TARGET_POINTS_27_N = [(1350, 800), (1350, 600)]
-TARGET_POINTS_27_S = [(1350, 200), (1350, 400)]
+TARGET_POINTS_27_S = [(1350, 250), (1350, 450)]
 # Target points
 target_points = []
 landing_rwy = ''
 target_rwy = ''
 
 
+# Parse the data shown on the 'strips' on the right side of the screen
 def parse_plane_strips(html):
     global plane_states
 
     plane_states = [[], [], [], []]
+
+    # Regex expression to parse the strips of the planes waiting to takeoff
     to_queue_expression = \
         r'<div id="(.+?)" name="\1".+? rgb\(192, 228, 250\);">\1 &nbsp;(\d{1,2}[LR]).+?To: (.{3,6})<'
     for match in re.findall(to_queue_expression, html):
         # print('Departure Callsign: {}, Runway: {}, Destination: {}'.format(match[0], match[1], match[2]))
         plane_states[TAKEOFF_QUEUE].append([match[0], match[1], match[2]])
 
+    # Regex expression to parse the strips of the planes climbing to cruise
     departure_expression = r'<div id="(.+?)" name="\1".+? rgb\(192, 228, 250\);">\1 &nbsp;(\D.+?) '
     for match in re.findall(departure_expression, html):
         # print('Departure Callsign: {}, Destination: {}'.format(match[0], match[1]))
@@ -53,23 +57,22 @@ def parse_plane_strips(html):
         if match[0] in taking_off:
             taking_off.remove(match[0])
 
+    # Regex expression to parse the strips of the planes descending towards the airport
     arrival_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;(\w[A-Z]{2,5}|\d{2,3}°)'
     for match in re.findall(arrival_expression, html):
         # print('Arrival Callsign: {}, Heading: {}'.format(match[0], match[1]))
         plane_states[ARRIVAL].append([match[0], match[1].replace('°', '')])
 
+    # Regex expression to parse the strips of the planes on approach
     approach_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;((?:9|27)[LR])'
     for match in re.findall(approach_expression, html):
         # print('Approach Callsign: {}, Runway: {}'.format(match[0], match[1]))
         plane_states[APPROACHING].append([match[0], match[1]])
         if match[0] in arrival_states.keys():
             arrival_states.pop(match[0])
-            if 'L' in target_rwy: 
-                target_rwy.replace('L', 'R')
-            else:
-                target_rwy.replace('R', 'L')
 
 
+# Parse the data shown on the radar screen
 def parse_canvas(html):
     parse_expression = r'<div id="(.+?)" class="SanSerif12".+?left: (.+?)px; top: (.+?)px.*\1<br>(\d{3}).(\d{2})'
     for match in re.findall(parse_expression, html):
@@ -86,6 +89,7 @@ def parse_canvas(html):
                     plane.append(int(match[4]))
 
 
+# Calculate the heading a plane needs to take to get from its current pos to a point
 def calculate_heading(pos1, pos2):
     dx = pos2[0] - pos1[0]
     dy = pos2[1] - pos1[1]
@@ -97,6 +101,7 @@ def calculate_heading(pos1, pos2):
     return round(initial_hdg)
 
 
+# Calculate the squared distance between 2 points
 def calculate_sqr_distance(pos1, pos2):
     dx = pos2[0] - pos1[0]
     dy = pos2[1] - pos1[1]
@@ -105,25 +110,31 @@ def calculate_sqr_distance(pos1, pos2):
     return sqr_d
 
 
+# Calculate the distance between 2 points
+def calculate_distance(pos1, pos2):
+    return calculate_sqr_distance(pos1, pos2) ** 0.5
+
+
 def get_command_list():
     command_list = []
-
-    # First find if it is safe for a plane to takeoff
-    # Values of min & max height for TO and Landing aircraft can be changed later
-
     # Index 0 is Left Rwy, Index 1 is Right Rwy
     safe_runways = [True, True]
+
+    # First find if it is safe for a plane to takeoff
+    # Check if the previous departure has achieved a particular speed in its takeoff run
+    # When the plane reaches this speed it will have reached 1000 feet before the previous planes' departure
     for departure in plane_states[DEPARTURE]:
         if departure[5] <= 13:
             safe_runways = [False, False]
 
     for approaching in plane_states[APPROACHING]:
-        if approaching[4] < 800:
+        if len(approaching) >= 5 and approaching[4] < 900:
             if 'L' in approaching[1]:
                 safe_runways[0] = False
             elif 'R' in approaching[1]:
                 safe_runways[1] = False
 
+    # Clear planes for takeoff accordingly
     for rto in plane_states[TAKEOFF_QUEUE]:
         if 'L' in rto[1] and safe_runways[0]:
             callsign = rto[0]
@@ -144,8 +155,13 @@ def get_command_list():
 
             safe_runways[1] = False
 
+    # Stores the squared distances to final
+    distances_to_final = {}
+
     # Calculate headings for each plane on the approaching list
     for arrival in plane_states[ARRIVAL]:
+        global target_rwy
+
         callsign = arrival[0]
         plane_heading = int(arrival[1])
         plane_pos = (arrival[2], arrival[3])
@@ -153,17 +169,17 @@ def get_command_list():
         if plane_pos[1] < 500:
             if landing_rwy == '9':
                 target_points = TARGET_POINTS_09_S
-                intercept_hdg = 60
+                intercept_hdg = 45
             else:
                 target_points = TARGET_POINTS_27_S
-                intercept_hdg = 300
+                intercept_hdg = 315
         else:
             if landing_rwy == '9':
                 target_points = TARGET_POINTS_09_N
-                intercept_hdg = 120
+                intercept_hdg = 135
             else:
                 target_points = TARGET_POINTS_27_N
-                intercept_hdg = 240
+                intercept_hdg = 225
 
         if not callsign in arrival_states:
             if landing_rwy == '27':
@@ -186,21 +202,33 @@ def get_command_list():
             continue
 
         target_point = target_points[arrival_states[callsign]]
+        sqr_distance_to_target = calculate_sqr_distance(
+            plane_pos, target_point)
+        distances_to_final[callsign] = sqr_distance_to_target
+
+        if arrival_states[callsign] == 0:
+            distances_to_final[callsign] += 40000
 
         # Check if the plane is near the target point
-        if calculate_sqr_distance(plane_pos, target_point) < 1000:
+        if sqr_distance_to_target < 1000:
             arrival_states[callsign] += 1
 
             command_list.append('{} C {}'.format(
                 callsign, 4 - arrival_states[callsign]))
             # Check if the plane is at the last point
             if arrival_states[callsign] == len(target_points):
+                if 'L' in target_rwy:
+                    target_rwy = target_rwy.replace('L', 'R')
+                else:
+                    target_rwy = target_rwy.replace('R', 'L')
                 hdg_str = str(intercept_hdg)
                 if len(hdg_str) < 3:
                     hdg_str = '0' + hdg_str
-                
+
                 command_list.append('{} C {}'.format(callsign, hdg_str))
                 command_list.append('{} L {}'.format(callsign, target_rwy))
+
+                continue
 
         target_heading = calculate_heading(plane_pos, target_point)
 
@@ -210,6 +238,41 @@ def get_command_list():
                 hdg_str = '0' + hdg_str
 
             command_list.append('{} C {}'.format(arrival[0], hdg_str))
+
+    # Ensure proper separation of arrival aircraft
+    for arrival in plane_states[ARRIVAL]:
+        callsign = arrival[0]
+
+        if arrival_states[callsign] == len(target_points):
+            continue
+
+        plane_pos = (arrival[2], arrival[3])
+        speed = arrival[5] * 10
+        clear_max_speed = True
+
+        for arrival_2 in plane_states[ARRIVAL]:
+            if arrival_2[0] == callsign:
+                continue
+
+            plane_2_pos = (arrival_2[2], arrival_2[3])
+            plane_2_callsign = arrival_2[0]
+
+            if arrival_states[plane_2_callsign] == len(target_points):
+                continue
+
+            distance_btw_planes = calculate_sqr_distance(
+                plane_pos, plane_2_pos)
+
+            if distance_btw_planes < 100 ** 2:
+                if distances_to_final[plane_2_callsign] < distances_to_final[callsign]:
+                    clear_max_speed = False
+
+                    break
+
+        if clear_max_speed and speed < 240:
+            command_list.append('{} S 240'.format(callsign))
+        elif not clear_max_speed and speed == 240:
+            command_list.append('{} S 180'.format(callsign))
 
     return command_list
 
@@ -230,8 +293,8 @@ if __name__ == '__main__':
     # Change the airport and start the game
     driver.find_element(by=By.XPATH,
                         value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
-    '''driver.find_element(by=By.XPATH,
-                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()'''
+    driver.find_element(by=By.XPATH,
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
     time.sleep(1)
