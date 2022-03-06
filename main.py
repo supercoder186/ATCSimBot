@@ -33,6 +33,7 @@ TARGET_POINTS_27_S = [(1350, 200), (1350, 400)]
 # Target points
 target_points = []
 landing_rwy = ''
+target_rwy = ''
 
 
 def parse_plane_strips(html):
@@ -109,7 +110,7 @@ def get_command_list():
     # Index 0 is Left Rwy, Index 1 is Right Rwy
     safe_runways = [True, True]
     for departure in plane_states[DEPARTURE]:
-        if departure[5] <= 12:
+        if departure[5] <= 13:
             safe_runways = [False, False]
 
     for approaching in plane_states[APPROACHING]:
@@ -144,25 +145,26 @@ def get_command_list():
         callsign = arrival[0]
         plane_heading = int(arrival[1])
         plane_pos = (arrival[2], arrival[3])
-        
+
         if plane_pos[1] < 500:
             if landing_rwy == '9':
                 target_points = TARGET_POINTS_09_S
                 intercept_hdg = 60
-                target_rwy = '9R'
             else:
                 target_points = TARGET_POINTS_27_S
                 intercept_hdg = 300
-                target_rwy = '27L'
         else:
             if landing_rwy == '9':
                 target_points = TARGET_POINTS_09_N
                 intercept_hdg = 120
-                target_rwy = '9L'
             else:
                 target_points = TARGET_POINTS_27_N
                 intercept_hdg = 240
-                target_rwy = '27R'
+
+        if 'L' in target_rwy: 
+            target_rwy.replace('L', 'R')
+        else:
+            target_rwy.replace('R', 'L')
 
         if not callsign in arrival_states:
             if landing_rwy == '27':
@@ -247,9 +249,11 @@ if __name__ == '__main__':
     if abs(90 - wind_dir) < abs(270 - wind_dir):
         # Hardcoded but I will change this later
         landing_rwy = '9'
+        target_rwy = '9L'
     else:
         # Hardcoded but I will change this later
         landing_rwy = '27'
+        target_rwy = '27R'
 
     command_input = driver.find_element(by=By.XPATH,
                                         value='//*[@id="canvas"]/div[1]/div/form/input[1]')
