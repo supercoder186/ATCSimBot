@@ -274,6 +274,14 @@ def get_command_list():
         elif not clear_max_speed and speed == 240:
             command_list.append('{} S 180'.format(callsign))
 
+    # Ensure approaching planes are at 160 knots
+    for approaching in plane_states[APPROACHING]:
+        callsign = arrival[0]
+        alt = approaching[4]
+        speed = approaching[5] * 10
+        if speed < 160 and alt < 900:
+            command_list.append('{} S 160'.format(callsign))
+
     return command_list
 
 
