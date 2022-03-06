@@ -276,10 +276,10 @@ def get_command_list():
 
     # Ensure approaching planes are at 160 knots
     for approaching in plane_states[APPROACHING]:
-        callsign = arrival[0]
+        callsign = approaching[0]
         alt = approaching[4]
         speed = approaching[5] * 10
-        if speed < 160 and alt < 900:
+        if speed < 160 and alt > 900:
             command_list.append('{} S 160'.format(callsign))
 
     return command_list
