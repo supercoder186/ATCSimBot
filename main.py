@@ -185,14 +185,14 @@ def get_command_list():
             if landing_rwy == '27':
                 if plane_pos[1] > 200 and plane_pos[1] < 800 and plane_pos[0] > 1350:
                     arrival_states[callsign] = 1
-                    command_list.append('{} C 3 EX'.format(callsign))
+                    command_list.append('{} C 2 EX'.format(callsign))
                 else:
                     arrival_states[callsign] = 0
                     command_list.append('{} C 4'.format(callsign))
             else:
                 if plane_pos[1] > 200 and plane_pos[1] < 800 and plane_pos[0] < 350:
                     arrival_states[callsign] = 1
-                    command_list.append('{} C 3 EX'.format(callsign))
+                    command_list.append('{} C 2 EX'.format(callsign))
                 else:
                     arrival_states[callsign] = 0
                     command_list.append('{} C 4'.format(callsign))
