@@ -127,7 +127,7 @@ def get_command_list():
     # Check if the previous departure has achieved a particular speed in its takeoff run
     # When the plane reaches this speed it will have reached 1000 feet before the previous planes' departure
     for departure in plane_states[DEPARTURE]:
-        if len(departure) >= 6 and departure[5] <= 14:
+        if len(departure) >= 6 and departure[4] < 200:
             safe_runways = [False, False]
 
     for approaching in plane_states[APPROACHING]:
