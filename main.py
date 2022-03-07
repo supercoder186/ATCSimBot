@@ -1,4 +1,3 @@
-from subprocess import call
 from selenium.webdriver import Firefox
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -21,6 +20,7 @@ APPROACHING = 3
 # Each index will contain an array of each plane in that state
 plane_states = [[], [], [], []]
 taking_off = []
+speeding_up = []
 intercepting = {}
 arrival_states = {}
 
@@ -127,7 +127,7 @@ def get_command_list():
     # Check if the previous departure has achieved a particular speed in its takeoff run
     # When the plane reaches this speed it will have reached 1000 feet before the previous planes' departure
     for departure in plane_states[DEPARTURE]:
-        if departure[5] <= 14:
+        if len(departure) >= 6 and departure[5] <= 14:
             safe_runways = [False, False]
 
     for approaching in plane_states[APPROACHING]:
@@ -153,8 +153,8 @@ def get_command_list():
             if not callsign in taking_off:
                 destination = rto[2]
                 command_list.append(
-                '{} C {} C 11 T'.format(callsign, destination))
-            
+                    '{} C {} C 11 T'.format(callsign, destination))
+
                 taking_off.append(callsign)
 
             safe_runways[1] = False
@@ -202,7 +202,8 @@ def get_command_list():
                     command_list.append('{} C 4'.format(callsign))
 
         elif arrival_states[callsign] == len(target_points):
-            command_list.append('{} L {}'.format(callsign, intercepting[callsign]))
+            command_list.append('{} L {}'.format(
+                callsign, intercepting[callsign]))
             continue
 
         target_point = target_points[arrival_states[callsign]]
@@ -273,10 +274,13 @@ def get_command_list():
 
                     break
 
-        if clear_max_speed and speed == 160:
+        if clear_max_speed and speed < 240 and not callsign in speeding_up:
             command_list.append('{} S 240'.format(callsign))
-        elif not clear_max_speed and speed == 240:
+        elif not clear_max_speed and speed == 240 or callsign in speeding_up:
             command_list.append('{} S 160'.format(callsign))
+            speeding_up.remove(callsign)
+        elif speed == 240 and callsign in speeding_up:
+            speeding_up.remove(callsign)
 
     # Ensure approaching planes are at 160 knots
     for approaching in plane_states[APPROACHING]:
