@@ -276,9 +276,10 @@ def get_command_list():
 
         if clear_max_speed and speed < 240 and not callsign in speeding_up:
             command_list.append('{} S 240'.format(callsign))
-        elif not clear_max_speed and speed == 240 or callsign in speeding_up:
+        elif not clear_max_speed and (speed == 240 or callsign in speeding_up):
             command_list.append('{} S 160'.format(callsign))
-            speeding_up.remove(callsign)
+            if callsign in speeding_up:
+                speeding_up.remove(callsign)
         elif speed == 240 and callsign in speeding_up:
             speeding_up.remove(callsign)
 
