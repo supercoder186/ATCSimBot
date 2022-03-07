@@ -1,4 +1,4 @@
-from selenium.webdriver import Firefox
+from selenium.webdriver import Firefox, Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import ElementNotInteractableException
@@ -304,7 +304,7 @@ def execute_commands(commands):
 
 
 if __name__ == '__main__':
-    # Start up chrome and open the website
+    # Start up firefox and open the website
     driver = Firefox()
     driver.maximize_window()
     driver.get('http://atc-sim.com/')
