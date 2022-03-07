@@ -25,6 +25,8 @@ intercepting = {}
 arrival_states = {}
 
 
+# Position of OCK VOR
+POS_OCK = (867,259)
 # Target points with 09 landing runway
 TARGET_POINTS_09_N = [(350, 800), (350, 600)]
 TARGET_POINTS_09_S = [(350, 250), (350, 450)]
@@ -111,11 +113,6 @@ def calculate_sqr_distance(pos1, pos2):
 
     sqr_d = (dx ** 2) + (dy ** 2)
     return sqr_d
-
-
-# Calculate the distance between 2 points
-def calculate_distance(pos1, pos2):
-    return calculate_sqr_distance(pos1, pos2) ** 0.5
 
 
 def get_command_list():
@@ -205,14 +202,22 @@ def get_command_list():
             command_list.append('{} L {}'.format(
                 callsign, intercepting[callsign]))
             continue
+        
+        if arrival_states[callsign] >= 0:
+            target_point = target_points[arrival_states[callsign]]
+        else:
+            target_point = POS_OCK
 
-        target_point = target_points[arrival_states[callsign]]
         sqr_distance_to_target = calculate_sqr_distance(
             plane_pos, target_point)
         distances_to_final[callsign] = sqr_distance_to_target
 
-        if arrival_states[callsign] == 0:
+        if arrival_states[callsign] <= 0:
             distances_to_final[callsign] += 40000
+        
+        if arrival_states[callsign] < 0:
+            distances_to_final[callsign] += calculate_sqr_distance(POS_OCK, \
+                TARGET_POINTS_09_S[0] if landing_rwy == '9' else TARGET_POINTS_27_S[0])
 
         # Check if the plane is near the target point
         if sqr_distance_to_target < 1000:
@@ -246,6 +251,9 @@ def get_command_list():
 
     # Ensure proper separation of arrival aircraft
     for arrival in plane_states[ARRIVAL]:
+        if len(arrival) < 6:
+            continue
+
         callsign = arrival[0]
 
         if arrival_states[callsign] == len(target_points):
@@ -256,26 +264,28 @@ def get_command_list():
         clear_max_speed = True
 
         for arrival_2 in plane_states[ARRIVAL]:
-            if arrival_2[0] == callsign:
+            callsign_2 = arrival_2[0]
+        
+            if len(arrival_2) < 6 or callsign_2 == callsign:
                 continue
-
+        
             plane_2_pos = (arrival_2[2], arrival_2[3])
-            plane_2_callsign = arrival_2[0]
 
-            if arrival_states[plane_2_callsign] == len(target_points):
+            if arrival_states[callsign_2] == len(target_points):
                 continue
 
             distance_btw_planes = calculate_sqr_distance(
                 plane_pos, plane_2_pos)
 
             if distance_btw_planes < 100 ** 2:
-                if distances_to_final[plane_2_callsign] < distances_to_final[callsign]:
+                if distances_to_final[callsign_2] < distances_to_final[callsign]:
                     clear_max_speed = False
 
                     break
 
         if clear_max_speed and speed < 240 and not callsign in speeding_up:
             command_list.append('{} S 240'.format(callsign))
+            speeding_up.append(callsign)
         elif not clear_max_speed and (speed == 240 or callsign in speeding_up):
             command_list.append('{} S 160'.format(callsign))
             if callsign in speeding_up:
@@ -293,6 +303,36 @@ def get_command_list():
         speed = approaching[5] * 10
         if speed < 160 and alt > 900:
             command_list.append('{} S 160'.format(callsign))
+    
+    # Ensure approaching planes don't collide
+    for approaching in plane_states[APPROACHING]:
+        if len(approaching) < 4:
+            continue
+
+        callsign = approaching[0]
+        rwy = approaching[1]
+        pos = (approaching[2], approaching[3])
+        for approaching_2 in plane_states[APPROACHING]:
+            callsign_2 = approaching_2[0]
+            rwy_2 = approaching_2[1]
+
+            if len(approaching_2) < 4 or callsign == callsign_2 \
+                or rwy != rwy_2:
+                continue
+        
+            plane_2_pos = (approaching_2[2], approaching_2[3])
+
+            distance_btw_planes = calculate_sqr_distance(
+                pos, plane_2_pos)
+
+            # Order go-around if dangerously close, go to OCK from where the plane will be re-sequenced
+            if distance_btw_planes < 17 ** 2:
+                if ('27' in rwy and (pos[0] > plane_2_pos[0])) or \
+                    ('9' in rwy and (pos[0] < plane_2_pos[0])):
+                    command_list.append('{} A C 7 EX C {}'.format(callsign, \
+                        calculate_heading(pos, POS_OCK)))
+                    arrival_states[callsign] = -1
+                        
 
     return command_list
 
@@ -313,8 +353,8 @@ if __name__ == '__main__':
     # Change the airport and start the game
     driver.find_element(by=By.XPATH,
                         value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
-    '''driver.find_element(by=By.XPATH,
-                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()'''
+    driver.find_element(by=By.XPATH,
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
     time.sleep(1)
