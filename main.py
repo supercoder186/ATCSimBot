@@ -59,6 +59,8 @@ def parse_plane_strips(html):
         plane_states[DEPARTURE].append([match[0], match[1]])
         if match[0] in taking_off:
             taking_off.remove(match[0])
+            if 'BEE' in match[0] and match[1] == 'BUZAD':
+                execute_commands('{} C 11 EX'.format(match[0]))
 
     # Regex expression to parse the strips of the planes descending towards the airport
     arrival_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;(\w[A-Z]{2,5}|\d{2,3}°)'
