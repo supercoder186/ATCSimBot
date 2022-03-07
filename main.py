@@ -127,7 +127,7 @@ def get_command_list():
     # Check if the previous departure has achieved a particular speed in its takeoff run
     # When the plane reaches this speed it will have reached 1000 feet before the previous planes' departure
     for departure in plane_states[DEPARTURE]:
-        if len(departure) >= 6 and departure[5] <= 14:
+        if len(departure) >= 6 and departure[4] < 200:
             safe_runways = [False, False]
 
     for approaching in plane_states[APPROACHING]:
@@ -312,8 +312,8 @@ if __name__ == '__main__':
     # Change the airport and start the game
     driver.find_element(by=By.XPATH,
                         value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
-    '''driver.find_element(by=By.XPATH,
-                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()'''
+    driver.find_element(by=By.XPATH,
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
     time.sleep(1)
