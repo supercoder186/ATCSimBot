@@ -25,8 +25,8 @@ intercepting = {}
 arrival_states = {}
 
 
-# Position of OCK VOR
-POS_OCK = (867,259)
+# Position of BNN VOR
+POS_BNN = (818, 722)
 # Target points with 09 landing runway
 TARGET_POINTS_09_N = [(350, 800), (350, 600)]
 TARGET_POINTS_09_S = [(350, 250), (350, 450)]
@@ -202,11 +202,11 @@ def get_command_list():
             command_list.append('{} L {}'.format(
                 callsign, intercepting[callsign]))
             continue
-        
+
         if arrival_states[callsign] >= 0:
             target_point = target_points[arrival_states[callsign]]
         else:
-            target_point = POS_OCK
+            target_point = POS_BNN
 
         sqr_distance_to_target = calculate_sqr_distance(
             plane_pos, target_point)
@@ -214,10 +214,10 @@ def get_command_list():
 
         if arrival_states[callsign] <= 0:
             distances_to_final[callsign] += 40000
-        
+
         if arrival_states[callsign] < 0:
-            distances_to_final[callsign] += calculate_sqr_distance(POS_OCK, \
-                TARGET_POINTS_09_S[0] if landing_rwy == '9' else TARGET_POINTS_27_S[0])
+            distances_to_final[callsign] += calculate_sqr_distance(POS_BNN,
+                                                                   TARGET_POINTS_09_N[0] if landing_rwy == '9' else TARGET_POINTS_27_N[0])
 
         # Check if the plane is near the target point
         if sqr_distance_to_target < 1000:
@@ -265,10 +265,10 @@ def get_command_list():
 
         for arrival_2 in plane_states[ARRIVAL]:
             callsign_2 = arrival_2[0]
-        
+
             if len(arrival_2) < 6 or callsign_2 == callsign:
                 continue
-        
+
             plane_2_pos = (arrival_2[2], arrival_2[3])
 
             if arrival_states[callsign_2] == len(target_points):
@@ -303,10 +303,10 @@ def get_command_list():
         speed = approaching[5] * 10
         if speed < 160 and alt > 900:
             command_list.append('{} S 160'.format(callsign))
-    
+
     # Ensure approaching planes don't collide
     for approaching in plane_states[APPROACHING]:
-        if len(approaching) < 4:
+        if len(approaching) < 5:
             continue
 
         callsign = approaching[0]
@@ -317,22 +317,26 @@ def get_command_list():
             rwy_2 = approaching_2[1]
 
             if len(approaching_2) < 4 or callsign == callsign_2 \
-                or rwy != rwy_2:
+                    or rwy != rwy_2:
                 continue
-        
+
             plane_2_pos = (approaching_2[2], approaching_2[3])
 
             distance_btw_planes = calculate_sqr_distance(
                 pos, plane_2_pos)
 
-            # Order go-around if dangerously close, go to OCK from where the plane will be re-sequenced
+            # Order go-around if dangerously close, go to BNN from where the plane will be re-sequenced
             if distance_btw_planes < 17 ** 2:
-                if ('27' in rwy and (pos[0] > plane_2_pos[0])) or \
-                    ('9' in rwy and (pos[0] < plane_2_pos[0])):
-                    command_list.append('{} A C 7 EX C {}'.format(callsign, \
-                        calculate_heading(pos, POS_OCK)))
+                if approaching[4] == approaching_2[4]:
+                    if ('27' in rwy and (pos[0] > plane_2_pos[0])) or \
+                            ('9' in rwy and (pos[0] < plane_2_pos[0])):
+                        command_list.append('{} A C 7 EX C {}'.format(callsign,
+                                                                      calculate_heading(pos, POS_BNN)))
+                        arrival_states[callsign] = -1
+                elif approaching[4] > approaching_2[4]:
+                    command_list.append('{} A C 7 EX C {}'.format(callsign,
+                                                                  calculate_heading(pos, POS_BNN)))
                     arrival_states[callsign] = -1
-                        
 
     return command_list
 
@@ -353,8 +357,8 @@ if __name__ == '__main__':
     # Change the airport and start the game
     driver.find_element(by=By.XPATH,
                         value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
-    driver.find_element(by=By.XPATH,
-                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()
+    '''driver.find_element(by=By.XPATH,
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()'''
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
     time.sleep(1)
