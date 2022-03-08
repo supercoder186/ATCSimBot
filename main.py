@@ -59,8 +59,6 @@ def parse_plane_strips(html):
         plane_states[DEPARTURE].append([match[0], match[1]])
         if match[0] in taking_off:
             taking_off.remove(match[0])
-            if 'BEE' in match[0] and match[1] == 'BUZAD':
-                execute_commands('{} C 11 EX'.format(match[0]))
 
     # Regex expression to parse the strips of the planes descending towards the airport
     arrival_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;(\w[A-Z]{2,5}|\d{2,3}°)'
@@ -126,6 +124,9 @@ def get_command_list():
     # Check if the previous departure has achieved a particular speed in its takeoff run
     # When the plane reaches this speed it will have reached 1000 feet before the previous planes' departure
     for departure in plane_states[DEPARTURE]:
+        if 'BEE' in departure[0] and departure[1] == 'BUZAD' and departure[4] == 200:
+            command_list.append('{} C 11 EX'.format(departure[0]))
+
         if len(departure) >= 6 and departure[4] < 200:
             safe_runways = [False, False]
 
@@ -379,11 +380,9 @@ if __name__ == '__main__':
 
     # Check if the landing runway is 09 or 27
     if abs(90 - wind_dir) < abs(270 - wind_dir):
-        # Hardcoded but I will change this later
         landing_rwy = '9'
         target_rwy = '9L'
     else:
-        # Hardcoded but I will change this later
         landing_rwy = '27'
         target_rwy = '27R'
 
