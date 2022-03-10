@@ -48,13 +48,13 @@ def check_headings(point1,bearing1,point2,bearing2,intsec):
         return None
 
 def find_intersection(point1,bearing1,point2,bearing2): # points to be given in tuple (x,y), bearing in degrees
-    if bearing1 != 0:
+    if bearing1 != 0 and bearing1 != 180:
         gradient1 = math.tan((math.pi/2)-(bearing1*math.pi/180)) # equation in both x and y
         eq1 = np.array([1,-gradient1, point1[1]-(gradient1*point1[0])])
     else:
         # equation only in x
         eq1 = np.array([0,1, point1[0]])
-    if bearing2 != 0:
+    if bearing2 != 0 and bearing2 != 180:
         gradient2 = math.tan((math.pi/2)-(bearing2*math.pi/180)) # equation in both x and y
         eq2 = np.array([1,-gradient2, point2[1]-(gradient2*point2[0])])
     else:
