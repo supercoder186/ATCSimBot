@@ -39,37 +39,6 @@ target_points = []
 landing_rwy = ''
 target_rwy = ''
 
-# Functions to help find intersection of plane paths
-def check_headings(point1,bearing1,point2,bearing2,intsec):
-    c = 450*math.pi/180
-    if (math.cos(c-(bearing1*math.pi/180))*(intsec[0]-point1[0]) > 0 or math.sin(c-(bearing1*math.pi/180))*(intsec[1]-point1[1]) > 0) and (math.cos(c-(bearing2*math.pi/180))*(intsec[0]-point2[0]) > 0 or math.sin(c-(bearing2*math.pi/180))*(intsec[1]-point2[1]) > 0):
-        return intsec # function returns a tuple with intersection (x,y) or None if there will be no intersection
-    else:
-        return None
-
-def find_intersection(point1,bearing1,point2,bearing2): # points to be given in tuple (x,y), bearing in degrees
-    if bearing1 != 0 and bearing1 != 180:
-        gradient1 = math.tan((math.pi/2)-(bearing1*math.pi/180)) # equation in both x and y
-        eq1 = np.array([1,-gradient1, point1[1]-(gradient1*point1[0])])
-    else:
-        # equation only in x
-        eq1 = np.array([0,1, point1[0]])
-    if bearing2 != 0 and bearing2 != 180:
-        gradient2 = math.tan((math.pi/2)-(bearing2*math.pi/180)) # equation in both x and y
-        eq2 = np.array([1,-gradient2, point2[1]-(gradient2*point2[0])])
-    else:
-        # equation only in x
-        eq2 = np.array([0,1, point2[0]])
-    
-    aug = np.array([eq1[-1],eq2[-1]])
-    augMatrix = np.array([eq1[:-1],eq2[:-1]])
-    try:
-        solution = np.linalg.solve(augMatrix,aug)
-        intsec = (solution[1],solution[0])
-        return check_headings(point1,bearing1,point2,bearing2,intsec) #returns tuple of intersection point or None
-    except np.linalg.LinAlgError:
-        return None
-
 # Parse the data shown on the 'strips' on the right side of the screen
 def parse_plane_strips(html):
     global plane_states
@@ -136,6 +105,37 @@ def calculate_heading(pos1, pos2):
 
     return round(initial_hdg)
 
+# Functions to help find intersection of plane paths
+def check_headings(point1,bearing1,point2,bearing2,intsec):
+    c = 450*math.pi/180
+    if (math.cos(c-(bearing1*math.pi/180))*(intsec[0]-point1[0]) > 0 or math.sin(c-(bearing1*math.pi/180))*(intsec[1]-point1[1]) > 0) and (math.cos(c-(bearing2*math.pi/180))*(intsec[0]-point2[0]) > 0 or math.sin(c-(bearing2*math.pi/180))*(intsec[1]-point2[1]) > 0):
+        return intsec # function returns a tuple with intersection (x,y) or None if there will be no intersection
+    else:
+        return None
+
+def find_intersection(point1,bearing1,point2,bearing2): # points to be given in tuple (x,y), bearing in degrees
+    if bearing1 != 0 and bearing1 != 180:
+        gradient1 = math.tan((math.pi/2)-(bearing1*math.pi/180)) # equation in both x and y
+        eq1 = np.array([1,-gradient1, point1[1]-(gradient1*point1[0])])
+    else:
+        # equation only in x
+        eq1 = np.array([0,1, point1[0]])
+    if bearing2 != 0 and bearing2 != 180:
+        gradient2 = math.tan((math.pi/2)-(bearing2*math.pi/180)) # equation in both x and y
+        eq2 = np.array([1,-gradient2, point2[1]-(gradient2*point2[0])])
+    else:
+        # equation only in x
+        eq2 = np.array([0,1, point2[0]])
+    
+    aug = np.array([eq1[-1],eq2[-1]])
+    augMatrix = np.array([eq1[:-1],eq2[:-1]])
+    try:
+        solution = np.linalg.solve(augMatrix,aug)
+        intsec = (solution[1],solution[0])
+        return check_headings(point1,bearing1,point2,bearing2,intsec) #returns tuple of intersection point or None
+    except np.linalg.LinAlgError:
+        return None
+
 
 # Calculate the squared distance between 2 points
 def calculate_sqr_distance(pos1, pos2):
@@ -144,6 +144,11 @@ def calculate_sqr_distance(pos1, pos2):
 
     sqr_d = (dx ** 2) + (dy ** 2)
     return sqr_d
+
+
+# Calculate the distance between 2 points
+def calculate_distance(pos1, pos2):
+    return calculate_sqr_distance(pos1, pos2) ** 0.5
 
 
 def get_command_list():
@@ -299,22 +304,18 @@ def get_command_list():
 
         for arrival_2 in plane_states[ARRIVAL]:
             callsign_2 = arrival_2[0]
-
             if len(arrival_2) < 6 or callsign_2 == callsign:
                 continue
 
-            plane_2_pos = (arrival_2[2], arrival_2[3])
-
+            pos_2 = (arrival_2[2], arrival_2[3])
             if arrival_states[callsign_2] == len(target_points):
                 continue
-
             distance_btw_planes = calculate_sqr_distance(
-                plane_pos, plane_2_pos)
+                plane_pos, pos_2)
 
             if distance_btw_planes < 100 ** 2:
                 if distances_to_final[callsign_2] < distances_to_final[callsign]:
                     clear_max_speed = False
-
                     break
 
         if clear_max_speed and speed < 240 and not callsign in speeding_up:
@@ -347,23 +348,24 @@ def get_command_list():
         rwy = approaching[1]
         pos = (approaching[2], approaching[3])
         for approaching_2 in plane_states[APPROACHING]:
+            if len(approaching_2) < 4:
+                continue
+
             callsign_2 = approaching_2[0]
             rwy_2 = approaching_2[1]
 
-            if len(approaching_2) < 4 or callsign == callsign_2 \
-                    or rwy != rwy_2:
+            if callsign == callsign_2 or rwy != rwy_2:
                 continue
 
-            plane_2_pos = (approaching_2[2], approaching_2[3])
-
+            pos_2 = (approaching_2[2], approaching_2[3])
             distance_btw_planes = calculate_sqr_distance(
-                pos, plane_2_pos)
+                pos, pos_2)
 
             # Order go-around if dangerously close, go to BNN from where the plane will be re-sequenced
             if distance_btw_planes < 17 ** 2:
                 if approaching[4] == approaching_2[4]:
-                    if ('27' in rwy and (pos[0] > plane_2_pos[0])) or \
-                            ('9' in rwy and (pos[0] < plane_2_pos[0])):
+                    if ('27' in rwy and (pos[0] > pos_2[0])) or \
+                            ('9' in rwy and (pos[0] < pos_2[0])):
                         command_list.append('{} A C 7 EX C {}'.format(callsign,
                                                                       calculate_heading(pos, POS_BNN)))
                         arrival_states[callsign] = -1
@@ -371,6 +373,32 @@ def get_command_list():
                     command_list.append('{} A C 7 EX C {}'.format(callsign,
                                                                   calculate_heading(pos, POS_BNN)))
                     arrival_states[callsign] = -1
+
+    # Ensure arrival planes don't crash into departing planes
+    for arrival in plane_states[ARRIVAL]:
+        if len(arrival) < 6:
+            continue
+
+        callsign = arrival[0]
+        pos = (arrival[2], arrival[3])
+        alt = arrival[4]
+        hdg = arrival[5]
+
+        for departure in plane_states[DEPARTURE]:
+            if len(departure) < 6:
+                continue
+
+            callsign_2 = departure[0]
+            pos_2 = (departure[2], departure[3])
+            alt_2 = departure[4]
+            hdg_2 = departure[5]
+
+            distance_btw_planes = calculate_distance(pos, pos_2)
+            if not distance_btw_planes < 110 or math.abs(alt - alt_2) < 1000 or (alt - alt_2) > 200:
+                continue
+            
+            intersect = calculate_intersection(pos, hdg, pos_2, hdg_2)
+            rel_time_1 = 
 
     return command_list
 
