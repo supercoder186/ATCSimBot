@@ -2,6 +2,7 @@ from selenium.webdriver import Firefox, Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import ElementNotInteractableException
+import numpy as np
 import time
 import re
 import math
@@ -38,6 +39,36 @@ target_points = []
 landing_rwy = ''
 target_rwy = ''
 
+# Functions to help find intersection of plane paths
+def check_headings(point1,bearing1,point2,bearing2,intsec):
+    c = 450*math.pi/180
+    if (math.cos(c-(bearing1*math.pi/180))*(intsec[0]-point1[0]) > 0 or math.sin(c-(bearing1*math.pi/180))*(intsec[1]-point1[1]) > 0) and (math.cos(c-(bearing2*math.pi/180))*(intsec[0]-point2[0]) > 0 or math.sin(c-(bearing2*math.pi/180))*(intsec[1]-point2[1]) > 0):
+        return intsec # function returns a tuple with intersection (x,y) or None if there will be no intersection
+    else:
+        return None
+
+def find_intersection(point1,bearing1,point2,bearing2): # points to be given in tuple (x,y), bearing in degrees
+    if bearing1 != 0 and bearing1 != 180:
+        gradient1 = math.tan((math.pi/2)-(bearing1*math.pi/180)) # equation in both x and y
+        eq1 = np.array([1,-gradient1, point1[1]-(gradient1*point1[0])])
+    else:
+        # equation only in x
+        eq1 = np.array([0,1, point1[0]])
+    if bearing2 != 0 and bearing2 != 180:
+        gradient2 = math.tan((math.pi/2)-(bearing2*math.pi/180)) # equation in both x and y
+        eq2 = np.array([1,-gradient2, point2[1]-(gradient2*point2[0])])
+    else:
+        # equation only in x
+        eq2 = np.array([0,1, point2[0]])
+    
+    aug = np.array([eq1[-1],eq2[-1]])
+    augMatrix = np.array([eq1[:-1],eq2[:-1]])
+    try:
+        solution = np.linalg.solve(augMatrix,aug)
+        intsec = (solution[1],solution[0])
+        return check_headings(point1,bearing1,point2,bearing2,intsec) #returns tuple of intersection point or None
+    except np.linalg.LinAlgError:
+        return None
 
 # Parse the data shown on the 'strips' on the right side of the screen
 def parse_plane_strips(html):
