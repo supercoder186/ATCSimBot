@@ -1,7 +1,9 @@
-from selenium.webdriver import Firefox, Chrome
+from selenium.webdriver import Firefox
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import ElementNotInteractableException
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
+
 import numpy as np
 import time
 import re
@@ -469,8 +471,12 @@ def execute_commands(commands):
 
 
 if __name__ == '__main__':
+    # Force background rendering to allow OBS recording
+    options = FirefoxOptions()
+    options.set_preference('widget.windows.window_occlusion_tracking.enabled', False)
+
     # Start up firefox and open the website
-    driver = Firefox()
+    driver = Firefox(options=options)
     driver.maximize_window()
     driver.get('http://atc-sim.com/')
 

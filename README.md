@@ -17,12 +17,3 @@ After completing the installation instructions, simply double click the python f
 This code will only work on 1080p resolution & 100% display scaling. The values for the different points on the frame are hardcoded for simplicity.
 
 The code is not tested on Linux / MacOS. It might or might not work
-
-## Using different browsers
-Towards the bottom of the file main.py, around line 310 (exact value will vary as the code gets updated), there is a line of code- 
-`driver = Firefox()`
-
-This can be changed to use Chrome
-`driver = Chrome()`
-
-Note that the corresponding webdriver must be installed. They can be downloaded from [here](https://www.selenium.dev/documentation/webdriver/getting_started/install_drivers/)
