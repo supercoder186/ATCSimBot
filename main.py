@@ -19,14 +19,17 @@ APPROACHING = 3
 # 2 - planes being guided to their final approach
 # 3 - planes on final approach
 # Each index will contain an array of each plane in that state
+plane_list = []
 plane_states = [[], [], [], []]
 taking_off = []
 speeding_up = []
 intercepting = {}
 arrival_states = {}
+clear_max_speed = {}
 
 
 # Position of BNN VOR
+WAYPTS = {}
 POS_BNN = (818, 722)
 # Target points with 09 landing runway
 TARGET_POINTS_09_N = [(350, 800), (350, 600)]
@@ -39,11 +42,13 @@ target_points = []
 landing_rwy = ''
 target_rwy = ''
 
+
 # Parse the data shown on the 'strips' on the right side of the screen
 def parse_plane_strips(html):
     global plane_states
 
     plane_states = [[], [], [], []]
+    plane_list = []
 
     # Regex expression to parse the strips of the planes waiting to takeoff
     to_queue_expression = \
@@ -51,12 +56,14 @@ def parse_plane_strips(html):
     for match in re.findall(to_queue_expression, html):
         # print('Departure Callsign: {}, Runway: {}, Destination: {}'.format(match[0], match[1], match[2]))
         plane_states[TAKEOFF_QUEUE].append([match[0], match[1], match[2]])
+        plane_list.append(match[0])
 
     # Regex expression to parse the strips of the planes climbing to cruise
     departure_expression = r'<div id="(.+?)" name="\1".+? rgb\(192, 228, 250\);">\1 &nbsp;(\D.+?) '
     for match in re.findall(departure_expression, html):
         # print('Departure Callsign: {}, Destination: {}'.format(match[0], match[1]))
         plane_states[DEPARTURE].append([match[0], match[1]])
+        plane_list.append(match[0])
         if match[0] in taking_off:
             taking_off.remove(match[0])
 
@@ -65,12 +72,14 @@ def parse_plane_strips(html):
     for match in re.findall(arrival_expression, html):
         # print('Arrival Callsign: {}, Heading: {}'.format(match[0], match[1]))
         plane_states[ARRIVAL].append([match[0], match[1].replace('°', '')])
+        plane_list.append(match[0])
 
     # Regex expression to parse the strips of the planes on approach
     approach_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;((?:9|27)[LR])'
     for match in re.findall(approach_expression, html):
         # print('Approach Callsign: {}, Runway: {}'.format(match[0], match[1]))
         plane_states[APPROACHING].append([match[0], match[1]])
+        plane_list.append(match[0])
         if match[0] in arrival_states.keys():
             arrival_states.pop(match[0])
         if match[0] in intercepting.keys():
@@ -88,10 +97,20 @@ def parse_canvas(html):
         for category in plane_states:
             for plane in category:
                 if plane[0] == callsign:
-                    plane.append(int(match[1]) + 25)
-                    plane.append(950 - int(match[2]))
-                    plane.append(int(match[3]) * 100)
-                    plane.append(int(match[4]))
+                    plane.append(int(match[1]) + 25)   # x coord
+                    plane.append(950 - int(match[2]))  # y coord
+                    plane.append(int(match[3]) * 100)  # alt
+                    plane.append(int(match[4]))        # spd
+
+
+def parse_waypts(html):
+    parse_expression = r'<img src="draw_.+\.php\?ID=(.+?)&amp;TYPE=[01]" style="position: absolute; left: (-?\d+)px; top: (-?\d+)px'
+    for match in re.findall(parse_expression, html):
+        name = match[0]
+        pos_x = int(match[1]) + 25
+        pos_y = 950 - int(match[2])
+
+        WAYPTS[name] = (pos_x, pos_y)
 
 
 # Calculate the heading a plane needs to take to get from its current pos to a point
@@ -105,34 +124,42 @@ def calculate_heading(pos1, pos2):
 
     return round(initial_hdg)
 
+
 # Functions to help find intersection of plane paths
-def check_headings(point1,bearing1,point2,bearing2,intsec):
+def check_headings(point1, bearing1, point2, bearing2, intsec):
     c = 450*math.pi/180
-    if (math.cos(c-(bearing1*math.pi/180))*(intsec[0]-point1[0]) > 0 or math.sin(c-(bearing1*math.pi/180))*(intsec[1]-point1[1]) > 0) and (math.cos(c-(bearing2*math.pi/180))*(intsec[0]-point2[0]) > 0 or math.sin(c-(bearing2*math.pi/180))*(intsec[1]-point2[1]) > 0):
-        return intsec # function returns a tuple with intersection (x,y) or None if there will be no intersection
+    if (math.cos(c-(bearing1*math.pi/180))*(intsec[0]-point1[0]) > 0 or math.sin(c-(bearing1*math.pi/180))*(intsec[1]-point1[1]) > 0)\
+            and (math.cos(c-(bearing2*math.pi/180))*(intsec[0]-point2[0]) > 0 or math.sin(c-(bearing2*math.pi/180))*(intsec[1]-point2[1]) > 0):
+        # function returns a tuple with intersection (x,y) or None if there will be no intersection
+        return intsec
     else:
         return None
 
-def find_intersection(point1,bearing1,point2,bearing2): # points to be given in tuple (x,y), bearing in degrees
-    if bearing1 != 0 and bearing1 != 180:
-        gradient1 = math.tan((math.pi/2)-(bearing1*math.pi/180)) # equation in both x and y
-        eq1 = np.array([1,-gradient1, point1[1]-(gradient1*point1[0])])
+
+# points to be given in tuple (x,y), bearing in degrees
+def calculate_intersection(point1, bearing1, point2, bearing2):
+    if bearing1 not in [0, 180]:
+        # equation in both x and y
+        gradient1 = math.tan((math.pi/2)-(bearing1*math.pi/180))
+        eq1 = np.array([1, -gradient1, point1[1]-(gradient1*point1[0])])
     else:
         # equation only in x
-        eq1 = np.array([0,1, point1[0]])
-    if bearing2 != 0 and bearing2 != 180:
-        gradient2 = math.tan((math.pi/2)-(bearing2*math.pi/180)) # equation in both x and y
-        eq2 = np.array([1,-gradient2, point2[1]-(gradient2*point2[0])])
+        eq1 = np.array([0, 1, point1[0]])
+    if bearing2 not in [0, 180]:
+        # equation in both x and y
+        gradient2 = math.tan((math.pi/2)-(bearing2*math.pi/180))
+        eq2 = np.array([1, -gradient2, point2[1]-(gradient2*point2[0])])
     else:
         # equation only in x
-        eq2 = np.array([0,1, point2[0]])
-    
-    aug = np.array([eq1[-1],eq2[-1]])
-    augMatrix = np.array([eq1[:-1],eq2[:-1]])
+        eq2 = np.array([0, 1, point2[0]])
+
+    aug = np.array([eq1[-1], eq2[-1]])
+    augMatrix = np.array([eq1[:-1], eq2[:-1]])
     try:
-        solution = np.linalg.solve(augMatrix,aug)
-        intsec = (solution[1],solution[0])
-        return check_headings(point1,bearing1,point2,bearing2,intsec) #returns tuple of intersection point or None
+        solution = np.linalg.solve(augMatrix, aug)
+        intsec = (solution[1], solution[0])
+        # returns tuple of intersection point or None
+        return check_headings(point1, bearing1, point2, bearing2, intsec)
     except np.linalg.LinAlgError:
         return None
 
@@ -155,6 +182,15 @@ def get_command_list():
     command_list = []
     # Index 0 is Left Rwy, Index 1 is Right Rwy
     safe_runways = [True, True]
+
+    # Update keys of cleared_max_speed according to the overall plane list
+    to_pop = []
+    for k in clear_max_speed.keys():
+        if not k in plane_list:
+            to_pop.append(k)
+    
+    for p in to_pop:
+        clear_max_speed.pop(p)
 
     # First find if it is safe for a plane to takeoff
     # Check if the previous departure has achieved a particular speed in its takeoff run
@@ -245,7 +281,7 @@ def get_command_list():
         if arrival_states[callsign] >= 0:
             target_point = target_points[arrival_states[callsign]]
         else:
-            target_point = POS_BNN
+            target_point = WAYPTS['BNN']
 
         sqr_distance_to_target = calculate_sqr_distance(
             plane_pos, target_point)
@@ -255,7 +291,7 @@ def get_command_list():
             distances_to_final[callsign] += 40000
 
         if arrival_states[callsign] < 0:
-            distances_to_final[callsign] += calculate_sqr_distance(POS_BNN,
+            distances_to_final[callsign] += calculate_sqr_distance(WAYPTS['BNN'],
                                                                    TARGET_POINTS_09_N[0] if landing_rwy == '9' else TARGET_POINTS_27_N[0])
 
         # Check if the plane is near the target point
@@ -300,8 +336,8 @@ def get_command_list():
 
         plane_pos = (arrival[2], arrival[3])
         speed = arrival[5] * 10
-        clear_max_speed = True
 
+        clear_max_speed[callsign] = True
         for arrival_2 in plane_states[ARRIVAL]:
             callsign_2 = arrival_2[0]
             if len(arrival_2) < 6 or callsign_2 == callsign:
@@ -315,18 +351,9 @@ def get_command_list():
 
             if distance_btw_planes < 100 ** 2:
                 if distances_to_final[callsign_2] < distances_to_final[callsign]:
-                    clear_max_speed = False
+                    clear_max_speed[callsign] = False
                     break
-
-        if clear_max_speed and speed < 240 and not callsign in speeding_up:
-            command_list.append('{} S 240'.format(callsign))
-            speeding_up.append(callsign)
-        elif not clear_max_speed and (speed == 240 or callsign in speeding_up):
-            command_list.append('{} S 160'.format(callsign))
-            if callsign in speeding_up:
-                speeding_up.remove(callsign)
-        elif speed == 240 and callsign in speeding_up:
-            speeding_up.remove(callsign)
+       
 
     # Ensure approaching planes are at 160 knots
     for approaching in plane_states[APPROACHING]:
@@ -380,25 +407,56 @@ def get_command_list():
             continue
 
         callsign = arrival[0]
+        hdg = int(arrival[1])
         pos = (arrival[2], arrival[3])
         alt = arrival[4]
-        hdg = arrival[5]
+        spd = arrival[5]
 
         for departure in plane_states[DEPARTURE]:
             if len(departure) < 6:
                 continue
 
             callsign_2 = departure[0]
+            dest_2 = departure[1]
             pos_2 = (departure[2], departure[3])
             alt_2 = departure[4]
-            hdg_2 = departure[5]
+            spd_2 = departure[5]
 
+            clear_max_speed[callsign_2] = True
             distance_btw_planes = calculate_distance(pos, pos_2)
-            if not distance_btw_planes < 110 or math.abs(alt - alt_2) < 1000 or (alt - alt_2) > 200:
+            if not distance_btw_planes < 110 or abs(alt - alt_2) < 1000 or (alt - alt_2) > 200:
+                continue
+
+            hdg_2 = calculate_heading(pos_2, WAYPTS[dest_2])
+            intersect = calculate_intersection(pos, hdg, pos_2, hdg_2)
+
+            if not intersect:
+                continue
+
+            rel_time_1 = calculate_distance(pos, intersect) / spd
+            rel_time_2 = calculate_distance(pos_2, intersect) / spd_2
+
+            if abs(rel_time_1 - rel_time_2) > 5:
                 continue
             
-            intersect = calculate_intersection(pos, hdg, pos_2, hdg_2)
-            rel_time_1 = 
+            plane_to_slow = callsign if rel_time_1 > rel_time_2 else callsign_2
+            clear_max_speed[plane_to_slow] = False
+
+    for plane in plane_states[DEPARTURE] + plane_states[ARRIVAL]:
+        callsign = plane[0]
+
+        if not callsign in clear_max_speed.keys():
+            continue
+
+        if clear_max_speed[callsign] and speed < 240 and not callsign in speeding_up:
+            command_list.append('{} S 240'.format(callsign))
+            speeding_up.append(callsign)
+        elif not clear_max_speed[callsign] and (speed == 240 or callsign in speeding_up):
+            command_list.append('{} S 160'.format(callsign))
+            if callsign in speeding_up:
+                speeding_up.remove(callsign)
+        elif speed == 240 and callsign in speeding_up:
+            speeding_up.remove(callsign)
 
     return command_list
 
@@ -448,6 +506,10 @@ if __name__ == '__main__':
     command_input = driver.find_element(by=By.XPATH,
                                         value='//*[@id="canvas"]/div[1]/div/form/input[1]')
 
+    canvas_text = driver.find_element(by=By.XPATH,
+                                      value='//*[@id="canvas"]').get_attribute('innerHTML')
+    
+    parse_waypts(canvas_text)
     while True:
         driver.switch_to.frame('ProgressStrips')
         strips_text = driver.find_element(by=By.XPATH,
