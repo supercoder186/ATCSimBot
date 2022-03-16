@@ -9,7 +9,7 @@ import time
 import re
 import math
 import sys
-import atexit
+import msvcrt
 
 TAKEOFF_QUEUE = 0
 DEPARTURE = 1
@@ -30,6 +30,8 @@ speeding_up = []
 intercepting = {}
 arrival_states = {}
 clear_max_speed = {}
+handoffs = 0
+landings = 0
 
 
 # Position of Waypoints
@@ -49,45 +51,92 @@ target_rwy = ''
 
 # Parse the data shown on the 'strips' on the right side of the screen
 def parse_plane_strips(html):
-    global plane_states
+    global plane_states, handoffs, landings
 
-    plane_states = [[], [], [], []]
     plane_list = []
 
+    temp = []
     # Regex expression to parse the strips of the planes waiting to takeoff
     to_queue_expression = \
         r'<div id="(.+?)" name="\1".+? rgb\(192, 228, 250\);">\1 &nbsp;(\d{1,2}[LR]).+?To: (.{3,6})<'
     for match in re.findall(to_queue_expression, html):
         # print('Departure Callsign: {}, Runway: {}, Destination: {}'.format(match[0], match[1], match[2]))
-        plane_states[TAKEOFF_QUEUE].append([match[0], match[1], match[2]])
+        temp.append([match[0], match[1], match[2]])
         plane_list.append(match[0])
 
+    plane_states[TAKEOFF_QUEUE] = temp
+
+    temp = []
     # Regex expression to parse the strips of the planes climbing to cruise
     departure_expression = r'<div id="(.+?)" name="\1".+? rgb\(192, 228, 250\);">\1 &nbsp;(\D.+?) '
     for match in re.findall(departure_expression, html):
         # print('Departure Callsign: {}, Destination: {}'.format(match[0], match[1]))
-        plane_states[DEPARTURE].append([match[0], match[1]])
+        temp.append([match[0], match[1]])
         plane_list.append(match[0])
         if match[0] in taking_off:
             taking_off.remove(match[0])
 
+    for plane in plane_states[DEPARTURE]:
+        if len(plane) < 1:
+            continue
+
+        callsign = plane[0]
+        present = False
+
+        for plane_2 in temp:
+            if len(plane_2) < 1:
+                continue
+            if callsign == plane_2[0]:
+                present = True
+                break
+        
+        if not present:
+            handoffs += 1
+            print('Handoff count:', handoffs)
+            
+    plane_states[DEPARTURE] = temp
+
+    temp = []
     # Regex expression to parse the strips of the planes descending towards the airport
     arrival_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;(\w[A-Z]{2,5}|\d{2,3}°)'
     for match in re.findall(arrival_expression, html):
         # print('Arrival Callsign: {}, Heading: {}'.format(match[0], match[1]))
-        plane_states[ARRIVAL].append([match[0], match[1].replace('°', '')])
+        temp.append([match[0], match[1].replace('°', '')])
         plane_list.append(match[0])
+    
+    plane_states[ARRIVAL] = temp
 
+    temp = []
     # Regex expression to parse the strips of the planes on approach
     approach_expression = r'<div id="(.+?)" name="\1".+? rgb\(252, 240, 198\);">\1 &nbsp;((?:9|27)[LR])'
     for match in re.findall(approach_expression, html):
         # print('Approach Callsign: {}, Runway: {}'.format(match[0], match[1]))
-        plane_states[APPROACHING].append([match[0], match[1]])
+        temp.append([match[0], match[1]])
         plane_list.append(match[0])
         if match[0] in arrival_states.keys():
             arrival_states.pop(match[0])
         if match[0] in intercepting.keys():
             intercepting.pop(match[0])
+    
+    for plane in plane_states[APPROACHING]:
+        if len(plane) < 1:
+            continue
+
+        callsign = plane[0]
+        present = False
+
+        for plane_2 in temp:
+            if len(plane_2) < 1:
+                continue
+            if callsign == plane_2[0]:
+                present = True
+                break
+        
+        if not present:
+            landings += 1
+            print('Landing count:', landings)
+
+    plane_states[APPROACHING] = temp
 
 
 # Parse the data shown on the radar screen
@@ -549,7 +598,13 @@ if __name__ == '__main__':
                                       value='//*[@id="canvas"]').get_attribute('innerHTML')
 
     parse_waypts(canvas_text)
+    
     while True:
+        if msvcrt.kbhit() and ord(msvcrt.getch()) == 13:
+            execute_commands(['EXIT'])
+            time.sleep(1)
+            break
+
         driver.switch_to.frame('ProgressStrips')
         strips_text = driver.find_element(by=By.XPATH,
                                           value='//*[@id="strips"]').get_attribute('innerHTML')
