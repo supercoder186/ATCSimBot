@@ -30,14 +30,14 @@ arrival_states = {}
 clear_max_speed = {}
 
 
-# Position of BNN VOR
+# Position of Waypoints
 WAYPTS = {}
-POS_BNN = (818, 722)
+POS_EGLL = (800, 500)
 # Target points with 09 landing runway
-TARGET_POINTS_09_N = [(350, 800), (350, 600)]
+TARGET_POINTS_09_N = [(350, 750), (350, 550)]
 TARGET_POINTS_09_S = [(350, 250), (350, 450)]
 # Target points with 27 landing runway
-TARGET_POINTS_27_N = [(1350, 800), (1350, 600)]
+TARGET_POINTS_27_N = [(1350, 750), (1350, 550)]
 TARGET_POINTS_27_S = [(1350, 250), (1350, 450)]
 # Target points
 target_points = []
@@ -162,7 +162,7 @@ def calculate_intersection(point1, bearing1, point2, bearing2):
         intsec = (solution[1], solution[0])
         # returns tuple of intersection point or None
         return check_headings(point1, bearing1, point2, bearing2, intsec)
-    except np.linalg.LinAlgError:
+    except:
         return None
 
 
@@ -190,12 +190,13 @@ def get_command_list():
     for k in clear_max_speed.keys():
         if not k in plane_list:
             to_pop.append(k)
-    
+
     for p in to_pop:
         clear_max_speed.pop(p)
 
     # First find if it is safe for a plane to takeoff
     # Check if the previous departure has achieved a particular speed in its takeoff run
+    # Also checks the position of the closest arrival
     # When the plane reaches this speed it will have reached 1000 feet before the previous planes' departure
     for departure in plane_states[DEPARTURE]:
         if 'BEE' in departure[0] and departure[1] == 'BUZAD' and departure[4] == 200:
@@ -205,7 +206,7 @@ def get_command_list():
             safe_runways = [False, False]
 
     for approaching in plane_states[APPROACHING]:
-        if len(approaching) >= 5 and approaching[4] < 900:
+        if len(approaching) >= 5 and (abs(approaching[2] - POS_EGLL[0]) < 45 or approaching[4] < 900):
             if 'L' in approaching[1]:
                 safe_runways[0] = False
             elif 'R' in approaching[1]:
@@ -293,8 +294,8 @@ def get_command_list():
             distances_to_final[callsign] += 40000
 
         if arrival_states[callsign] < 0:
-            distances_to_final[callsign] += calculate_sqr_distance(WAYPTS['BNN'],
-                                                                   TARGET_POINTS_09_N[0] if landing_rwy == '9' else TARGET_POINTS_27_N[0])
+            distances_to_final[callsign] += calculate_sqr_distance(WAYPTS['BNN'], TARGET_POINTS_09_N[0]\
+                 if landing_rwy == '9' else TARGET_POINTS_27_N[0])
 
         # Check if the plane is near the target point
         if sqr_distance_to_target < 1000:
@@ -351,11 +352,10 @@ def get_command_list():
             distance_btw_planes = calculate_sqr_distance(
                 plane_pos, pos_2)
 
-            if distance_btw_planes < 100 ** 2:
+            if distance_btw_planes < 150 ** 2:
                 if distances_to_final[callsign_2] < distances_to_final[callsign]:
                     clear_max_speed[callsign] = False
                     break
-       
 
     # Ensure approaching planes are at 160 knots
     for approaching in plane_states[APPROACHING]:
@@ -376,8 +376,15 @@ def get_command_list():
         callsign = approaching[0]
         rwy = approaching[1]
         pos = (approaching[2], approaching[3])
+
+        if approaching[4] <= 200:
+            continue
+
         for approaching_2 in plane_states[APPROACHING]:
             if len(approaching_2) < 4:
+                continue
+            
+            if approaching_2[4] <= 200:
                 continue
 
             callsign_2 = approaching_2[0]
@@ -391,16 +398,16 @@ def get_command_list():
                 pos, pos_2)
 
             # Order go-around if dangerously close, go to BNN from where the plane will be re-sequenced
-            if distance_btw_planes < 17 ** 2:
+            if distance_btw_planes < 30 ** 2:
                 if approaching[4] == approaching_2[4]:
                     if ('27' in rwy and (pos[0] > pos_2[0])) or \
                             ('9' in rwy and (pos[0] < pos_2[0])):
                         command_list.append('{} A C 7 EX C {}'.format(callsign,
-                                                                      calculate_heading(pos, POS_BNN)))
+                                                                      calculate_heading(pos, WAYPTS['BNN'])))
                         arrival_states[callsign] = -1
                 elif approaching[4] > approaching_2[4]:
                     command_list.append('{} A C 7 EX C {}'.format(callsign,
-                                                                  calculate_heading(pos, POS_BNN)))
+                                                                  calculate_heading(pos, WAYPTS['BNN'])))
                     arrival_states[callsign] = -1
 
     # Ensure arrival planes don't crash into departing planes
@@ -440,7 +447,7 @@ def get_command_list():
 
             if abs(rel_time_1 - rel_time_2) > 5:
                 continue
-            
+
             plane_to_slow = callsign if rel_time_1 > rel_time_2 else callsign_2
             clear_max_speed[plane_to_slow] = False
 
@@ -450,7 +457,8 @@ def get_command_list():
         if not callsign in clear_max_speed.keys():
             continue
 
-        if clear_max_speed[callsign] and speed < 240 and not callsign in speeding_up:
+        if clear_max_speed[callsign] and speed < 240 and not callsign in speeding_up \
+                and plane[4] > 1000 and 'BEE' not in callsign:
             command_list.append('{} S 240'.format(callsign))
             speeding_up.append(callsign)
         elif not clear_max_speed[callsign] and (speed == 240 or callsign in speeding_up):
@@ -473,7 +481,8 @@ def execute_commands(commands):
 if __name__ == '__main__':
     # Force background rendering to allow OBS recording
     options = FirefoxOptions()
-    options.set_preference('widget.windows.window_occlusion_tracking.enabled', False)
+    options.set_preference(
+        'widget.windows.window_occlusion_tracking.enabled', False)
 
     # Start up firefox and open the website
     driver = Firefox(options=options)
@@ -514,7 +523,7 @@ if __name__ == '__main__':
 
     canvas_text = driver.find_element(by=By.XPATH,
                                       value='//*[@id="canvas"]').get_attribute('innerHTML')
-    
+
     parse_waypts(canvas_text)
     while True:
         driver.switch_to.frame('ProgressStrips')
