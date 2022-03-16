@@ -8,6 +8,7 @@ import numpy as np
 import time
 import re
 import math
+import sys
 
 TAKEOFF_QUEUE = 0
 DEPARTURE = 1
@@ -488,6 +489,9 @@ if __name__ == '__main__':
     driver = Firefox(options=options)
     driver.maximize_window()
     driver.get('http://atc-sim.com/')
+
+    # Login if details provided
+    n = len(sys.argv)
 
     # Change the airport and start the game
     driver.find_element(by=By.XPATH,
