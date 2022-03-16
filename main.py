@@ -615,4 +615,11 @@ if __name__ == '__main__':
         parse_canvas(canvas_text)
         command_list = get_command_list()
         execute_commands(command_list)
+
+        count_display = driver.find_element(by=By.XPATH,
+                                          value='/html/body/div[1]/div/div[6]')
+
+        text = 'Takeoffs: {}\\n Landings: {}'.format(handoffs, landings)
+        driver.execute_script("arguments[0].innerText = '{}'".format(text), count_display)
+
         time.sleep(2)
