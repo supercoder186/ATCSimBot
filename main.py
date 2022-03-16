@@ -9,6 +9,7 @@ import time
 import re
 import math
 import sys
+import atexit
 
 TAKEOFF_QUEUE = 0
 DEPARTURE = 1
@@ -491,28 +492,47 @@ if __name__ == '__main__':
     driver.get('http://atc-sim.com/')
 
     # Login if details provided
-    n = len(sys.argv)
+    if len(sys.argv) >= 3:
+        email = sys.argv[1]
+        pswd = sys.argv[2]
+        driver.find_element(by=By.XPATH,
+        value = '/html/body/div[3]/div/div/div/a[1]').click()
+        driver.find_element(by=By.XPATH,
+        value = '/html/body/div[4]/div[1]/table[1]/tbody/tr/td[1]/form/div/table/tbody/tr[1]/td[2]/input')\
+            .send_keys(email)
+        driver.find_element(by=By.XPATH,
+        value = '/html/body/div[4]/div[1]/table[1]/tbody/tr/td[1]/form/div/table/tbody/tr[2]/td[2]/input')\
+            .send_keys(pswd)
+        driver.find_element(by=By.XPATH,
+        value = '/html/body/div[4]/div[1]/table[1]/tbody/tr/td[1]/form/div/table/tbody/tr[3]/td[2]/input').click()
+        time.sleep(1)
+            
+        # Change the airport and start the game
+        driver.find_element(by=By.XPATH,
+                            value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[48]').click()
+    else:
+        # Change the airport and start the game
+        driver.find_element(by=By.XPATH,
+                            value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
 
-    # Change the airport and start the game
-    driver.find_element(by=By.XPATH,
-                        value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
     '''driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()'''
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
-    time.sleep(1)
+    time.sleep(3)
 
-    failed = True
-    while failed:
-        try:
-            driver.find_element(
-                by=By.XPATH, value='//*[@id="btnclose"]').click()
-            failed = False
-        except ElementNotInteractableException:
-            time.sleep(1)
+    if len(sys.argv) < 3:
+        failed = True
+        while failed:
+            try:
+                driver.find_element(
+                    by=By.XPATH, value='//*[@id="btnclose"]').click()
+                failed = False
+            except ElementNotInteractableException:
+                time.sleep(1)
 
     wind_dir = int(driver.find_element(by=By.XPATH,
-                                       value='/html/body/div[1]/div/div[9]/div[1]').get_attribute('innerHTML').split('<br>')[1].replace('°', ''))
+                                       value='//*[@id="winddir"]').get_attribute('innerHTML').split('<br>')[1].replace('°', ''))
 
     # Check if the landing runway is 09 or 27
     if abs(90 - wind_dir) < abs(270 - wind_dir):
