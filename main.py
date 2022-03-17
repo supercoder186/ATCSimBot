@@ -229,6 +229,11 @@ def calculate_distance(pos1, pos2):
     return calculate_sqr_distance(pos1, pos2) ** 0.5
 
 
+# Calculates the difference between 2 headings
+def calculate_del_heading(hdg1, hdg2):
+    return abs((hdg2 - hdg1 + 540) % 360 - 180)
+
+
 def get_command_list():
     command_list = []
     # Index 0 is Left Rwy, Index 1 is Right Rwy
@@ -388,6 +393,7 @@ def get_command_list():
 
         plane_pos = (arrival[2], arrival[3])
         speed = arrival[5] * 10
+        hdg = int(arrival[1])
 
         clear_max_speed[callsign] = True
         for arrival_2 in plane_states[ARRIVAL]:
@@ -396,13 +402,18 @@ def get_command_list():
                 continue
 
             pos_2 = (arrival_2[2], arrival_2[3])
+            hdg_2 = int(arrival[1])
+
             if arrival_states[callsign_2] == len(target_points):
                 continue
 
             distance_btw_planes = calculate_sqr_distance(
                 plane_pos, pos_2)
 
-            if distance_btw_planes < 125 ** 2:
+            # Scale target distance by separation in headings
+            # Enables better dynamic spacing
+            target_distance = 85 + (1.5 * calculate_del_heading(hdg, hdg_2))
+            if distance_btw_planes < target_distance ** 2:
                 if distances_to_final[callsign_2] < distances_to_final[callsign]:
                     clear_max_speed[callsign] = False
                     break
@@ -566,8 +577,14 @@ if __name__ == '__main__':
         driver.find_element(by=By.XPATH,
                             value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
 
-    driver.find_element(by=By.XPATH,
-                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()
+    if len(sys.argv) == 4:
+        if sys.argv[3] == 'landing':
+            driver.find_element(by=By.XPATH,
+                            value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()
+        elif sys.argv[3] == 'takeoff':
+            driver.find_element(by=By.XPATH,
+                            value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[4]').click()
+    
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
     time.sleep(3)
@@ -586,7 +603,7 @@ if __name__ == '__main__':
                                        value='//*[@id="winddir"]').get_attribute('innerHTML').split('<br>')[1].replace('°', ''))
 
     # Check if the landing runway is 09 or 27
-    if abs(90 - wind_dir) < abs(270 - wind_dir):
+    if calculate_del_heading(90, wind_dir) < calculate_del_heading(270, wind_dir):
         landing_rwy = '9'
         target_rwy = '9L'
     else:
