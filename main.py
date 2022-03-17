@@ -89,11 +89,10 @@ def parse_plane_strips(html):
             if callsign == plane_2[0]:
                 present = True
                 break
-        
+
         if not present:
             handoffs += 1
-            print('Handoff count:', handoffs)
-            
+
     plane_states[DEPARTURE] = temp
 
     temp = []
@@ -103,7 +102,7 @@ def parse_plane_strips(html):
         # print('Arrival Callsign: {}, Heading: {}'.format(match[0], match[1]))
         temp.append([match[0], match[1].replace('°', '')])
         plane_list.append(match[0])
-    
+
     plane_states[ARRIVAL] = temp
 
     temp = []
@@ -117,7 +116,7 @@ def parse_plane_strips(html):
             arrival_states.pop(match[0])
         if match[0] in intercepting.keys():
             intercepting.pop(match[0])
-    
+
     for plane in plane_states[APPROACHING]:
         if len(plane) < 1:
             continue
@@ -131,10 +130,9 @@ def parse_plane_strips(html):
             if callsign == plane_2[0]:
                 present = True
                 break
-        
+
         if not present:
             landings += 1
-            print('Landing count:', landings)
 
     plane_states[APPROACHING] = temp
 
@@ -345,8 +343,8 @@ def get_command_list():
             distances_to_final[callsign] += 40000
 
         if arrival_states[callsign] < 0:
-            distances_to_final[callsign] += calculate_sqr_distance(WAYPTS['BNN'], TARGET_POINTS_09_N[0]\
-                 if landing_rwy == '9' else TARGET_POINTS_27_N[0])
+            distances_to_final[callsign] += calculate_sqr_distance(WAYPTS['BNN'], TARGET_POINTS_09_N[0]
+                                                                   if landing_rwy == '9' else TARGET_POINTS_27_N[0])
 
         # Check if the plane is near the target point
         if sqr_distance_to_target < 1000:
@@ -400,10 +398,11 @@ def get_command_list():
             pos_2 = (arrival_2[2], arrival_2[3])
             if arrival_states[callsign_2] == len(target_points):
                 continue
+
             distance_btw_planes = calculate_sqr_distance(
                 plane_pos, pos_2)
 
-            if distance_btw_planes < 150 ** 2:
+            if distance_btw_planes < 125 ** 2:
                 if distances_to_final[callsign_2] < distances_to_final[callsign]:
                     clear_max_speed[callsign] = False
                     break
@@ -434,7 +433,7 @@ def get_command_list():
         for approaching_2 in plane_states[APPROACHING]:
             if len(approaching_2) < 4:
                 continue
-            
+
             if approaching_2[4] <= 200:
                 continue
 
@@ -451,14 +450,13 @@ def get_command_list():
             # Order go-around if dangerously close, go to BNN from where the plane will be re-sequenced
             if distance_btw_planes < 30 ** 2:
                 if approaching[4] == approaching_2[4]:
-                    if ('27' in rwy and (pos[0] > pos_2[0])) or \
-                            ('9' in rwy and (pos[0] < pos_2[0])):
-                        command_list.append('{} A C 7 EX C {}'.format(callsign,
-                                                                      calculate_heading(pos, WAYPTS['BNN'])))
+                    if ('27' in rwy and (pos[0] > pos_2[0])) or ('9' in rwy and (pos[0] < pos_2[0])):
+                        command_list.append('{} A C 7 EX C {}'.format(
+                            callsign, calculate_heading(pos, WAYPTS['BNN'])))
                         arrival_states[callsign] = -1
                 elif approaching[4] > approaching_2[4]:
-                    command_list.append('{} A C 7 EX C {}'.format(callsign,
-                                                                  calculate_heading(pos, WAYPTS['BNN'])))
+                    command_list.append('{} A C 7 EX C {}'.format(
+                        callsign, calculate_heading(pos, WAYPTS['BNN'])))
                     arrival_states[callsign] = -1
 
     # Ensure arrival planes don't crash into departing planes
@@ -503,7 +501,11 @@ def get_command_list():
             clear_max_speed[plane_to_slow] = False
 
     for plane in plane_states[DEPARTURE] + plane_states[ARRIVAL]:
+        if len(plane) < 6:
+            continue
+
         callsign = plane[0]
+        speed = plane[5] * 10
 
         if not callsign in clear_max_speed.keys():
             continue
@@ -545,17 +547,17 @@ if __name__ == '__main__':
         email = sys.argv[1]
         pswd = sys.argv[2]
         driver.find_element(by=By.XPATH,
-        value = '/html/body/div[3]/div/div/div/a[1]').click()
+                            value='/html/body/div[3]/div/div/div/a[1]').click()
         driver.find_element(by=By.XPATH,
-        value = '/html/body/div[4]/div[1]/table[1]/tbody/tr/td[1]/form/div/table/tbody/tr[1]/td[2]/input')\
+                            value='/html/body/div[4]/div[1]/table[1]/tbody/tr/td[1]/form/div/table/tbody/tr[1]/td[2]/input')\
             .send_keys(email)
         driver.find_element(by=By.XPATH,
-        value = '/html/body/div[4]/div[1]/table[1]/tbody/tr/td[1]/form/div/table/tbody/tr[2]/td[2]/input')\
+                            value='/html/body/div[4]/div[1]/table[1]/tbody/tr/td[1]/form/div/table/tbody/tr[2]/td[2]/input')\
             .send_keys(pswd)
         driver.find_element(by=By.XPATH,
-        value = '/html/body/div[4]/div[1]/table[1]/tbody/tr/td[1]/form/div/table/tbody/tr[3]/td[2]/input').click()
+                            value='/html/body/div[4]/div[1]/table[1]/tbody/tr/td[1]/form/div/table/tbody/tr[3]/td[2]/input').click()
         time.sleep(1)
-            
+
         # Change the airport and start the game
         driver.find_element(by=By.XPATH,
                             value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[48]').click()
@@ -564,8 +566,8 @@ if __name__ == '__main__':
         driver.find_element(by=By.XPATH,
                             value='/html/body/div[4]/div[1]/form/table/tbody/tr/td[1]/div[1]/select/option[4]').click()
 
-    '''driver.find_element(by=By.XPATH,
-                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()'''
+    driver.find_element(by=By.XPATH,
+                        value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/div[7]/select/option[3]').click()
     driver.find_element(by=By.XPATH,
                         value='//*[@id="frmOptions"]/table/tbody/tr/td[1]/input[1]').click()
     time.sleep(3)
@@ -598,7 +600,7 @@ if __name__ == '__main__':
                                       value='//*[@id="canvas"]').get_attribute('innerHTML')
 
     parse_waypts(canvas_text)
-    
+
     while True:
         if msvcrt.kbhit() and ord(msvcrt.getch()) == 13:
             execute_commands(['EXIT'])
@@ -617,9 +619,10 @@ if __name__ == '__main__':
         execute_commands(command_list)
 
         count_display = driver.find_element(by=By.XPATH,
-                                          value='/html/body/div[1]/div/div[6]')
+                                            value='/html/body/div[1]/div/div[6]')
 
         text = 'Takeoffs: {}\\n Landings: {}'.format(handoffs, landings)
-        driver.execute_script("arguments[0].innerText = '{}'".format(text), count_display)
+        driver.execute_script(
+            "arguments[0].innerText = '{}'".format(text), count_display)
 
         time.sleep(2)
